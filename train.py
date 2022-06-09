@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+import wandb
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -520,7 +521,7 @@ def parse_opt(known=False):
     return opt
 
 
-def main(opt, callbacks=Callbacks()):
+def train_main(opt, callbacks=Callbacks()):
     # Checks
     if RANK in {-1, 0}:
         print_args(vars(opt))
