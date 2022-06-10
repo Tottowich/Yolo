@@ -519,9 +519,9 @@ def parse_opt(known=False):
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt
-
-
-def train_main(opt, callbacks=Callbacks()):
+# Recent: python train.py --data data/svhn.yaml --cfg models/yolov5m.yaml --weights "yolov5m.pt" --img-size 640 --hyp "data/hyps/hyp.scratch-low.yaml" --batch-size 1 --epochs 200 --save-period 10 
+# python train.py --data data/svhn.yaml --cfg models/yolov5x.yaml --weights "yolov5x.pt" --img-size 1280 --hyp "data/hyps/hyp.scratch-low.yaml" --batch-size 16 --epochs 200 --save-period 10
+def main(opt, callbacks=Callbacks()):
     # Checks
     if RANK in {-1, 0}:
         print_args(vars(opt))
