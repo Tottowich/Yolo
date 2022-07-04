@@ -114,6 +114,8 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
     dh /= 2
 
     if shape[::-1] != new_unpad:  # resize
+        # print(im.shape)
+        # print(new_unpad)
         im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
