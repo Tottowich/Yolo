@@ -70,10 +70,10 @@ class live_stream:
         args:
             points: xyz/xyzr points from sensor.
         """
-        print(self.img_size)
-        print(img0.shape)
+        #print(self.img_size)
+        #print(img0.shape)
         img = self.reshape(copy(img0))
-        print(img.shape)
+       # print(img.shape)
         if len(img.shape) == 3:
             img = img[None]
         #img = img[..., ::-1].transpose((0,3,1,2))  # BGR to RGB, BHWC to BCHW
@@ -141,12 +141,12 @@ def visualize_yolo(pred,img,args,fig=None,plot=None,names=None,logger=None):
                 label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f}')
                 annotator.box_label(xyxy, label, color=colors(c, True))
             img0 = annotator.result()[0]
-            print(img0.shape)
-            cv2.imshow("Predictions",img0.transpose(1,2,0))
+            #print(img0.shape)
+            cv2.imshow("Predictions",cv2.cvtColor(img0.transpose(1,2,0),cv2.COLOR_RGB2BGR))
             cv2.waitKey(1)
         else:
             #print(img.shape)
-            cv2.imshow("Predictions",img[0].cpu().numpy().transpose(1,2,0))
+            cv2.imshow("Predictions",cv2.cvtColor(img[0].cpu().numpy().transpose(1,2,0),cv2.COLOR_RGB2BGR))
             #print(f"Post viz Average img: {img.mean()}")
             cv2.waitKey(1)
 
