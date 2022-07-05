@@ -2,7 +2,7 @@
 """
 Plotting utils
 """
-
+import time
 import math
 import os
 from copy import copy
@@ -80,11 +80,12 @@ class Annotator:
             self.im = im
         self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
 
-    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)):
+    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(0, 0, 0)):
         # Add one xyxy box to image with label
         if self.pil or not is_ascii(label):
             self.draw.rectangle(box, width=self.lw, outline=color)  # box
             if label:
+                
                 w, h = self.font.getsize(label)  # text width, height
                 outside = box[1] - h >= 0  # label fits outside box
                 self.draw.rectangle(
@@ -98,6 +99,8 @@ class Annotator:
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
             cv2.rectangle(self.im, p1, p2, color, thickness=self.lw, lineType=cv2.LINE_AA)
             if label:
+                #print(f"label: {label}")
+                #time.sleep(10)
                 tf = max(self.lw - 1, 1)  # font thickness
                 w, h = cv2.getTextSize(label, 0, fontScale=self.lw / 3, thickness=tf)[0]  # text width, height
                 outside = p1[1] - h >= 3

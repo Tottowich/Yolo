@@ -120,12 +120,16 @@ def run(
 
         # Inference
         visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
+        print(f"Pre pred : im shape {im.shape}")
         pred = model(im, augment=augment, visualize=visualize)
+        print(f"Post pred : im shape {im.shape}")
         t3 = time_sync()
         dt[1] += t3 - t2
 
         # NMS
+        print(f"Pre NMS : pred {pred}")
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+        print(f"Post NMS : pred {pred}")
         dt[2] += time_sync() - t3
 
         # Second-stage classifier (optional)
@@ -146,11 +150,13 @@ def run(
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
+            print(im0.shape)
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
+                print(im.shape[2:],im0.shape)
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-
+                print(det)
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
@@ -173,6 +179,7 @@ def run(
 
             # Stream results
             im0 = annotator.result()
+            print(f"im0.shape: {im0.shape}")
             if view_img:
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond

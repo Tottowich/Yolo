@@ -109,7 +109,7 @@ def initialize_timer(transmitter,logger,args):
     #time_logger.create_metric("Load GPU")
     time_logger.create_metric("Infrence")
     time_logger.create_metric("Post Processing")
-    #time_logger.create_metric("Filter Predictions")
+    time_logger.create_metric("Format Predictions")
 
     if args.visualize:
         time_logger.create_metric("Visualize")
@@ -127,28 +127,35 @@ def visualize_yolo(pred,img,args,fig=None,plot=None,names=None,logger=None):
     #print(f"Pre viz Average img: {img.mean()}")
     for i,det in enumerate(pred):
         detections += 1
-        annotator = Annotator(img.cpu().numpy(), line_width=args.line_thickness, example=str(names))
+        img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
+        annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
         if len(det):
-            #print(det)
-            det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img.shape).round()
-            if args.disp_pred and logger is not None:
-                for c in det[:, -1].unique():
-                    n = (det[:, -1] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-                logger.info(f"{names[int(c)]} detections: {s}")
+            #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
+            det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
+            # if args.disp_pred and logger is not None:
+            #     for c in det[:, -1].unique():
+            #         n = (det[:, -1] == c).sum()  # detections per class
+            #         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+            # logger.info(f"{names[int(c)]} detections: {s}")
             for *xyxy, conf, cls in reversed(det):
                 c = int(cls)  # integer class
                 label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f}')
                 annotator.box_label(xyxy, label, color=colors(c, True))
-            img0 = annotator.result()[0]
-            #print(img0.shape)
-            cv2.imshow("Predictions",cv2.cvtColor(img0.transpose(1,2,0),cv2.COLOR_RGB2BGR))
+                print(colors(c,True))
+            img0 = annotator.result()
+            logger.info(f"Det: {det}")
+            img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
+            #print(f"Post viz Average img: {img0.mean()}")
+            cv2.imshow("Predictions",img0)
             cv2.waitKey(1)
         else:
             #print(img.shape)
-            cv2.imshow("Predictions",cv2.cvtColor(img[0].cpu().numpy().transpose(1,2,0),cv2.COLOR_RGB2BGR))
+            img0  = annotator.result()
+            img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
+            cv2.imshow("Predictions",img0)
             #print(f"Post viz Average img: {img.mean()}")
             cv2.waitKey(1)
+            
 
 
 
@@ -302,9 +309,10 @@ def main():
             #load_data_to_gpu(data_dict)
             #if log_time:
             #    time_logger.stop("Load GPU")
-
+           # print(img.shape)
             if log_time:
                 time_logger.start("Infrence")
+            
             pred = model(img,augment=args.augment)
             if log_time:
                 time_logger.stop("Infrence")
@@ -355,7 +363,7 @@ def main():
 
                 if log_time:
                     time_logger.start("Visualize")
-                visualize_yolo(pred,img,args,names = data_config["names"])
+                visualize_yolo(pred,img,args,names = data_config["names"],logger=logger)
                 if log_time:
                     time_logger.stop("Visualize")
                 #vis = V.create_live_scene(data_dict['points'][:,1:],ref_boxes=pred_dicts[0]['pred_boxes'],
