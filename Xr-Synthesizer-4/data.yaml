@@ -1,7 +1,0 @@
-names:
-- Adult
-nc: 1
-train: Xr-Synthesizer-4/train/images
-val: Xr-Synthesizer-4/valid/images
-test: Xr-Synthesizer-4/test/images
-limits: {"ir": 6000,"reflectivity": 255, "range": 25000}
