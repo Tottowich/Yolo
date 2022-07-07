@@ -33,7 +33,7 @@ from tools.visual_utils import open3d_vis_utils as V
 #from pcdet.datasets import DatasetTemplate
 #from pcdet.models import build_network, load_data_to_gpu
 from tools.xr_synth_utils import CSVRecorder,TimeLogger,filter_predictions,format_predictions,display_predictions
-from tools.xr_synth_utils import create_logger,proj_and_format
+from tools.xr_synth_utils import create_logger,proj_and_format, proj_alt
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
@@ -123,17 +123,46 @@ def initialize_timer(transmitter,logger,args):
     time_logger.create_metric("Full Pipeline")
 
     return time_logger
-class temp_scan:
-    h = 64
-    w = 1024
-def visualize_yolo_3D(pred,img,args,cloud,names=None,logger=None):
-    pass
+# class temp_scan:
+#     h = 64
+#     w = 1024
+def visualize_yolo_2D_test(pred_dict,img,args,names=None,logger=None):
+    detections = 0
+    #print(f"Pre viz Average img: {img.mean()}")
+    #heights = projec_2D_pred(pred,img[0],scan=s)
+    img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
+    annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
+    for i,det,lbl,score in enumerate(zip(pred_dict["pred_boxes"],pred_dict["pred_lables"],pred_dict["scores"])):
+        
+        detections += 1
+        if len(det):
+            #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
+            det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
+            # if args.disp_pred and logger is not None:
+            #     for c in det[:, -1].unique():
+            #         n = (det[:, -1] == c).sum()  # detections per class
+            #         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+            # logger.info(f"{names[int(c)]} detections: {s}")
+            label = None if args.hide_labels else (names[lbl] if args.hide_conf else f'{names[lbl]} {score:.2f} {det[5]:.2f} {np.sqrt(det[0]**2+det[1]**2):.2f}')
+            annotator.box_label(det[:4], label, color=colors(c, True))
+            img0 = annotator.result()
+            logger.info(f"Det: {det}")
+            img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
+            #print(f"Post viz Average img: {img0.mean()}")
+            cv2.imshow("Predictions",img0)
+            cv2.waitKey(1)
+    img0 = annotator.result()
+    logger.info(f"Det: {det}")
+    img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
+    #print(f"Post viz Average img: {img0.mean()}")
+    cv2.imshow("Predictions",img0)
+    cv2.waitKey(1)
 def visualize_yolo_2D(pred,img,args,names=None,logger=None):
     detections = 0
     #print(f"Pre viz Average img: {img.mean()}")
-    s = temp_scan
-    heights = projec_2D_pred(pred,img[0],scan=s)
+    #heights = projec_2D_pred(pred,img[0],scan=s)
     for i,det in enumerate(pred):
+        
         detections += 1
         img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
         annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
@@ -148,11 +177,11 @@ def visualize_yolo_2D(pred,img,args,names=None,logger=None):
             i = 0
             for *xyxy, conf, cls in reversed(det):
                 c = int(cls)  # integer class
-                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f} {heights[i][0]:.2f} {heights[i][1]:.2f}')
+                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f}')
                 i += 1
                 annotator.box_label(xyxy, label, color=colors(c, True))
             img0 = annotator.result()
-            logger.info(f"Det: {det}")
+            #logger.info(f"Det: {det}")
             img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
             #print(f"Post viz Average img: {img0.mean()}")
             cv2.imshow("Predictions",img0)
@@ -218,7 +247,6 @@ def parse_config():
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')    
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
     parser.add_argument('--auto', action='store_true', help='auto size using the model')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
 
     #parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
@@ -236,6 +264,7 @@ def parse_config():
     #parser.add_argument('--save_dir', type=str, default="../lidarCSV", help='specify the save directory')
     #parser.add_argument('--save_name', type=str, default="test_csv", help='specify the save name')
     if sys.version_info >= (3,9):
+        parser.add_argument('--augment', action='store_true', help='augmented inference')
         parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
         parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
         parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)
@@ -269,7 +298,7 @@ def parse_config():
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args,data_config = parse_config()
-    range_limit = None 
+    range_limit = None
     cudnn.benchmark = True  # set True to speed up constant image size inference
     #model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
     logger = create_logger()
@@ -313,9 +342,8 @@ def main():
             # Get lidar data
             img0 = utils_ouster.ir_ref_range(stream,scan,limits)
             pcd = utils_ouster.get_xyz(stream,scan)
-            pcd = utils_ouster.compress_mid_dim(pcd)
-            if range_limit is not None:
-                xyzr = utils_ouster.trim_xyzr(pcd,range_limit)
+
+            #pcd = utils_ouster.compress_mid_dim(pcd)
             #img0 /= 255
             img0, img = live.prep(img0)
             if len(img0.shape) == 3:
@@ -363,11 +391,12 @@ def main():
             if log_time:
                 time_logger.stop("Post Processing")
             #print(pred)
-            pred_dict = proj_and_format(copy(pred),img[0],scan=scan)
+            #pred_dict = proj_and_format(copy(pred),img[0],scan=scan)
+            pred_dict = proj_alt(copy(pred),img[0].cpu().numpy(),xyz=pcd)
             if len(pred_dict["pred_labels"]) > 0 and args.disp_pred:
                 display_predictions(pred_dict,names,logger)
-            if len(pred_dict["pred_boxes"]) > 0:
-                print(pred_dict)
+            #if len(pred_dict["pred_boxes"]) > 0:
+            #    print(pred_dict)
             #if log_time:
             #    time_logger.start("Filter Predictions")
             # Only uses pred_dicts[0] since batch size is one at live infrence
@@ -414,22 +443,23 @@ def main():
             if args.visualize:
                 if log_time:
                     time_logger.start("Visualize")
+                if range_limit is not None:
+                    xyzr = utils_ouster.trim_xyzr(pcd,range_limit)
                 if i == 0:
                     vis = LiveVisualizer("XR-SYNTHESIZER",
                                         class_names=names,
-                                        first_cloud=pcd,
+                                        first_cloud=utils_ouster.compress_mid_dim(pcd),
                                         classes_to_visualize=None
                                         )
                 else:
-                    vis.update(points=pcd, 
+                    vis.update(points=utils_ouster.compress_mid_dim(pcd), 
                             pred_boxes=pred_dict['pred_boxes'],
                             pred_labels=pred_dict['pred_labels'],
                             pred_scores=pred_dict['pred_scores'],
                             )
-                visualize_yolo_2D(pred,img,args,names=names,logger=logger)
-                    
-            if log_time:
-                time_logger.stop("Visualize")
+                visualize_yolo_2D(pred,img,args,names=names,logger=logger)     
+                if log_time:
+                    time_logger.stop("Visualize")
                                 #vis = V.create_live_scene(data_dict['points'][:,1:],ref_boxes=pred_dicts[0]['pred_boxes'],
                 #ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels'])
             # #elif args.visualize:
