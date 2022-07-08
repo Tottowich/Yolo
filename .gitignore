@@ -1,4 +1,8 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
+Xr-Synthesizer*/
+runs/
+evolve/
+best_weights/
 *.jpg
 *.jpeg
 *.png

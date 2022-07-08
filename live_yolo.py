@@ -159,8 +159,6 @@ def visualize_yolo_2D_test(pred_dict,img,args,names=None,logger=None):
     cv2.waitKey(1)
 def visualize_yolo_2D(pred,img,args,names=None,logger=None):
     detections = 0
-    #print(f"Pre viz Average img: {img.mean()}")
-    #heights = projec_2D_pred(pred,img[0],scan=s)
     for i,det in enumerate(pred):
         
         detections += 1
@@ -169,11 +167,7 @@ def visualize_yolo_2D(pred,img,args,names=None,logger=None):
         if len(det):
             #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
             det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
-            # if args.disp_pred and logger is not None:
-            #     for c in det[:, -1].unique():
-            #         n = (det[:, -1] == c).sum()  # detections per class
-            #         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-            # logger.info(f"{names[int(c)]} detections: {s}")
+            
             i = 0
             for *xyxy, conf, cls in reversed(det):
                 c = int(cls)  # integer class
@@ -189,43 +183,12 @@ def visualize_yolo_2D(pred,img,args,names=None,logger=None):
         else:
             #print(img.shape)
             img0  = annotator.result()
+            #print(img0.shape)
             img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
             cv2.imshow("Predictions",img0)
             #print(f"Post viz Average img: {img.mean()}")
             cv2.waitKey(1)
             
-def projec_2D_pred(pred,img0,scan,R=25,azi=90,logger=None):
-    
-    scale_y = scan.h/img0.shape[1]
-    scale_x = scan.w/img0.shape[2]
-    to_rad = math.pi/180
-    heights = []
-    for det in pred[0]:
-        if len(det)==0:
-            continue
-            
-        xyxy = det[:4]
-        x0,y0,x1,y1 = xyxy
-        ix, iy = int((x0+x1)/2), int((y0+y1)/2)
-
-        x0_scaled,y0_scaled,x1_scaled,y1_scaled = x0*scale_x,y0*scale_y,x1*scale_x,y1*scale_y
-        #print(f"x0: {x0_scaled},y0: {y0_scaled},x1: {x1_scaled},y1: {y1_scaled}")
-        low_y = iy-10 if iy-10>=0 else 0
-        high_y = iy+10 if iy+10<img0.shape[1] else img0.shape[1]
-        low_x = ix-10 if ix-10>=0 else 0
-        high_x = ix+10 if ix+10<img0.shape[2] else img0.shape[2]
-        print(f"low_y: {low_y},high_y: {high_y},low_x: {low_x},high_x: {high_x}")
-        r = np.median(img0[2,low_y:high_y,low_x:high_x].cpu().numpy())
-        #print(f"r: {r*R}")
-        theta = (y0_scaled+y1_scaled)/2 - scan.h/2
-        #print(f"theta: {theta}")
-        l = 2*math.tan(azi/2*to_rad)*r*R*math.cos(theta*to_rad)
-        #print(f"l: {l}")
-        det_h = l*(y1_scaled-y0_scaled)/scan.h
-        #print(f"Det_h: {det_h}")
-        heights.append([det_h,r*R])
-    return heights
-
 
 
 
@@ -298,7 +261,7 @@ def parse_config():
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args,data_config = parse_config()
-    range_limit = None
+    range_limit = [10,10,5]
     cudnn.benchmark = True  # set True to speed up constant image size inference
     #model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
     logger = create_logger()
@@ -342,14 +305,12 @@ def main():
             # Get lidar data
             img0 = utils_ouster.ir_ref_range(stream,scan,limits)
             pcd = utils_ouster.get_xyz(stream,scan)
-
-            #pcd = utils_ouster.compress_mid_dim(pcd)
-            #img0 /= 255
             img0, img = live.prep(img0)
             if len(img0.shape) == 3:
                 img0 = img0[None]
             img = torch.from_numpy(img).to(device)
             img = img.half() if model.fp16 else img.float()  # uint8 to fp16/32
+            img_to_vis = copy(img)
             if log_time:
                 time_logger.stop("Ouster Processing")
             
@@ -361,16 +322,7 @@ def main():
                 time_logger.start("Full Pipeline")
             if i%2 == 1 and log_time and i != 1:
                 time_logger.stop("Full Pipeline")
-            #if log_time:
-            #    time_logger.start("Data Prep")
-            #data_dict = live.prep(xyzr)
-            #if log_time:
-            #    time_logger.stop("Data Prep")
-            #print(f"data_dict: {data_dict}\npoints.shape = {data_dict['points'].shape}")
-            #print(f"points: {sum(data_dict['points'][:,0]==0)}")
-            #print(f"points: {(data_dict['points'][:8,:])}")
-
-            #print(f"points.shape: {data_dict['points'][0].shape}")
+            
             
 
             #if log_time:
@@ -395,33 +347,25 @@ def main():
             pred_dict = proj_alt(copy(pred),img[0].cpu().numpy(),xyz=pcd)
             if len(pred_dict["pred_labels"]) > 0 and args.disp_pred:
                 display_predictions(pred_dict,names,logger)
-            #if len(pred_dict["pred_boxes"]) > 0:
-            #    print(pred_dict)
-            #if log_time:
-            #    time_logger.start("Filter Predictions")
-            # Only uses pred_dicts[0] since batch size is one at live infrence
-            #pred_dicts = filter_predictions(pred_dicts[0], classes_to_use)
-            #if log_time:
-            #    time_logger.stop("Filter Predictions")
+            
                 
             
             
-            # if args.save_csv: # If recording, save to csv
-            #     if log_time:
-            #         time_logger.start("Save CSV")
-            #     recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dicts)
-            #     if log_time:
-            #         time_logger.stop("Save CSV")
-                #logger.info(f"Time to save to csv: {time.monotonic() - start:.3e}")
+            if args.save_csv: # If recording, save to csv
+                if log_time:
+                    time_logger.start("Save CSV")
+                recorder.add_frame_file(copy(data_dict["points"][:,1:-1]).cpu().numpy(),pred_dict)
+                if log_time:
+                    time_logger.stop("Save CSV")
             
-            # if transmitter.started_ml:
-            #     if log_time:
-            #         time_logger.start("Transmit UE5")
-            #     transmitter.pcd = copy(data_dict["points"][:,1:])
-            #     transmitter.pred_dict = copy(pred_dicts)data_dict
-            #     transmitter.send_pcd()
-            #     if log_time:
-            #         time_logger.stop("Transmit UE5")
+            if transmitter.started_ml:
+                if log_time:
+                    time_logger.start("Transmit UE5")
+                transmitter.pcd = copy(pcd)
+                transmitter.pred_dict = copy(pred_dict)
+                transmitter.send_pcd()
+                if log_time:
+                    time_logger.stop("Transmit UE5")
 
 
             if transmitter.started_udp: # If transmitting, send to udp
@@ -432,32 +376,27 @@ def main():
                 if log_time:
                     time_logger.stop("Transmit TD")
 
-            #logger.info(f"Frame {live.frame}")
-            # if args.visualize:
-            #     if log_time:
-            #         time_logger.start("Visualize")
-            #     visualize_yolo(pred,img,args,names = data_config["names"],logger=logger)
-            #     if log_time:
-            #         time_logger.stop("Visualize")
             
             if args.visualize:
                 if log_time:
                     time_logger.start("Visualize")
                 if range_limit is not None:
-                    xyzr = utils_ouster.trim_xyzr(pcd,range_limit)
+                    xyz = utils_ouster.trim_xyzr(utils_ouster.compress_mid_dim(pcd),range_limit)
+                else:
+                    xyz = utils_ouster.compress_mid_dim(pcd)
                 if i == 0:
                     vis = LiveVisualizer("XR-SYNTHESIZER",
                                         class_names=names,
-                                        first_cloud=utils_ouster.compress_mid_dim(pcd),
+                                        first_cloud=xyz,
                                         classes_to_visualize=None
                                         )
                 else:
-                    vis.update(points=utils_ouster.compress_mid_dim(pcd), 
+                    vis.update(points=xyz, 
                             pred_boxes=pred_dict['pred_boxes'],
                             pred_labels=pred_dict['pred_labels'],
                             pred_scores=pred_dict['pred_scores'],
                             )
-                visualize_yolo_2D(pred,img,args,names=names,logger=logger)     
+                visualize_yolo_2D(pred,img_to_vis,args,names=names,logger=logger)     
                 if log_time:
                     time_logger.stop("Visualize")
                                 #vis = V.create_live_scene(data_dict['points'][:,1:],ref_boxes=pred_dicts[0]['pred_boxes'],

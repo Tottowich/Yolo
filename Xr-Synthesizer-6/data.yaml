@@ -1,5 +1,0 @@
-names:
-- Adult
-nc: 1
-train: Xr-Synthesizer-6/train/images
-val: Xr-Synthesizer-6/valid/images
