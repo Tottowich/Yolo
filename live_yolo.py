@@ -96,14 +96,15 @@ def initialize_network(args,device):
     device = select_device(args.device)
     model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
     stride, names, pt = model.stride, model.names, model.pt
-    imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
+    imgsz = (args.imgsz, args.imgsz//2) if isinstance(args.imgsz, int) else args.imgsz  # tuple
+    imgsz = (640,1280)
     imgsz = check_img_size(imgsz=imgsz, s=stride)
-    imgsz = (imgsz[0],imgsz[0])
+    print(imgsz)
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
     live = live_stream(classes=names,ip=args.OU_ip,stride=stride,auto=args.auto)
 
     return model, stride, names, pt, device,live
-def initialize_timer(transmitter,logger,args):
+def initialize_timer(logger,args,transmitter=None):
     time_logger = TimeLogger(logger,args.disp_pred)
     time_logger.create_metric("Ouster Processing")
     #time_logger.create_metric("Pre Processing")
@@ -116,10 +117,11 @@ def initialize_timer(transmitter,logger,args):
         time_logger.create_metric("Visualize")
     if args.save_csv:
         time_logger.create_metric("Save CSV")
-    if transmitter.started_udp:
-        time_logger.create_metric("Transmit TD")
-    if transmitter.started_ml:
-        time_logger.create_metric("Transmit UE5")
+    if transmitter is not None:
+        if transmitter.started_udp:
+            time_logger.create_metric("Transmit TD")
+        if transmitter.started_ml:
+            time_logger.create_metric("Transmit UE5")
     time_logger.create_metric("Full Pipeline")
 
     return time_logger
@@ -132,32 +134,34 @@ def visualize_yolo_2D_test(pred_dict,img,args,names=None,logger=None):
     #heights = projec_2D_pred(pred,img[0],scan=s)
     img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
     annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
-    for i,det,lbl,score in enumerate(zip(pred_dict["pred_boxes"],pred_dict["pred_lables"],pred_dict["scores"])):
+    #print(pred_dict.keys())
+    for i,[det,lbl,score] in enumerate(zip(pred_dict["pred_boxes"],pred_dict["pred_labels"],pred_dict["pred_scores"])):
         
         detections += 1
         if len(det):
             #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
+            det = np.expand_dims(det,0)
             det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
+            det = det[0]
             # if args.disp_pred and logger is not None:
             #     for c in det[:, -1].unique():
             #         n = (det[:, -1] == c).sum()  # detections per class
             #         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
             # logger.info(f"{names[int(c)]} detections: {s}")
             label = None if args.hide_labels else (names[lbl] if args.hide_conf else f'{names[lbl]} {score:.2f} {det[5]:.2f} {np.sqrt(det[0]**2+det[1]**2):.2f}')
-            annotator.box_label(det[:4], label, color=colors(c, True))
-            img0 = annotator.result()
+            annotator.box_label(det[:4], label, color=colors(lbl, True))
+            #img0 = annotator.result()
             logger.info(f"Det: {det}")
-            img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
+            #img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
             #print(f"Post viz Average img: {img0.mean()}")
-            cv2.imshow("Predictions",img0)
-            cv2.waitKey(1)
+            #cv2.imshow("Predictions",img0)
+            #cv2.waitKey(1)
     img0 = annotator.result()
-    logger.info(f"Det: {det}")
     img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
     #print(f"Post viz Average img: {img0.mean()}")
     cv2.imshow("Predictions",img0)
     cv2.waitKey(1)
-def visualize_yolo_2D(pred,img,args,names=None,logger=None):
+def visualize_yolo_2D(pred,pred_dict,img,args,names=None,logger=None):
     detections = 0
     for i,det in enumerate(pred):
         
@@ -165,13 +169,15 @@ def visualize_yolo_2D(pred,img,args,names=None,logger=None):
         img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
         annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
         if len(det):
+            height = pred_dict["pred_boxes"][i,5]
             #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
             det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
             
             i = 0
             for *xyxy, conf, cls in reversed(det):
                 c = int(cls)  # integer class
-                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f}')
+                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f} {height:.2f}')
+
                 i += 1
                 annotator.box_label(xyxy, label, color=colors(c, True))
             img0 = annotator.result()
@@ -233,6 +239,7 @@ def parse_config():
         parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)
         parser.add_argument('--log_time', action=argparse.BooleanOptionalAction)
         parser.add_argument('--disp_pred', action=argparse.BooleanOptionalAction) 
+        parser.add_argument('--transmit', action=argparse.BooleanOptionalAction)
         
 
     else:
@@ -281,9 +288,12 @@ def main():
     # Set up network
     #model = initialize_network(cfg,args,logger,live)
     # Set up local network ports for IO
-    transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port, classes_to_send=[9])
-    transmitter.start_transmit_udp()
-    transmitter.start_transmit_ml()
+    if args.transmit:
+        transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port, classes_to_send=[9])
+        transmitter.start_transmit_udp()
+        transmitter.start_transmit_ml()
+    else:
+        transmitter = None
     try:
         [cfg_ouster, host_ouster] = utils_ouster.sensor_config(args.name if args.name is not None else args.OU_ip,args.udp_port,args.tcp_port)
     except:
@@ -330,7 +340,7 @@ def main():
             #load_data_to_gpu(data_dict)
             #if log_time:
             #    time_logger.stop("Load GPU")
-           # print(img.shape)
+            #print(img.shape)
             if log_time:
                 time_logger.start("Infrence")
             
@@ -358,7 +368,7 @@ def main():
                 if log_time:
                     time_logger.stop("Save CSV")
             
-            if transmitter.started_ml:
+            if args.transmit and transmitter.started_ml:
                 if log_time:
                     time_logger.start("Transmit UE5")
                 transmitter.pcd = copy(pcd)
@@ -368,12 +378,12 @@ def main():
                     time_logger.stop("Transmit UE5")
 
 
-            if transmitter.started_udp: # If transmitting, send to udp
+            if args.transmit and transmitter.started_udp: # If transmitting, send to udp
                 if log_time:
                     time_logger.start("Transmit TD")
                 transmitter.pred_dict = copy(pred_dict)
                 transmitter.send_dict()
-                if log_time:
+                if log_time :
                     time_logger.stop("Transmit TD")
 
             
@@ -396,7 +406,8 @@ def main():
                             pred_labels=pred_dict['pred_labels'],
                             pred_scores=pred_dict['pred_scores'],
                             )
-                visualize_yolo_2D(pred,img_to_vis,args,names=names,logger=logger)     
+                visualize_yolo_2D(pred,pred_dict,img_to_vis,args,names=names,logger=logger)     
+                #visualize_yolo_2D_test(pred_dict,img_to_vis,args,names=names,logger=logger)
                 if log_time:
                     time_logger.stop("Visualize")
                                 #vis = V.create_live_scene(data_dict['points'][:,1:],ref_boxes=pred_dicts[0]['pred_boxes'],
@@ -422,8 +433,9 @@ def main():
             #if i == 6:
             #    break 
             log_time = args.log_time
-    transmitter.stop_transmit_udp()
-    transmitter.stop_transmit_ml()
+    if args.transmit:
+        transmitter.stop_transmit_udp()
+        transmitter.stop_transmit_ml()
     if log_time:
         time_logger.visualize_results()
     logger.info("Stream Done")

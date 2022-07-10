@@ -1,5 +1,6 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 Xr-Synthesizer*/
+*.ipynb
 runs/
 evolve/
 best_weights/
