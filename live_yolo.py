@@ -282,6 +282,7 @@ def main():
     if args.save_csv:
         recorder = CSVRecorder(args.save_name,args.save_dir, cfg.CLASS_NAMES)
     limits = {"ir":6000,"reflectivity": 255, "range":25000}
+    #limits = {"ir":600, "reflectivity": 255, "range":10000}
     #if range_limit is not None:
     #    cfg.DATA_CONFIG.POINT_CLOUD_RANGE = [-range_limit[0],-range_limit[1],-range_limit[2],range_limit[0],range_limit[1],range_limit[2]]
         
@@ -303,7 +304,7 @@ def main():
         time_logger = initialize_timer(logger=logger,transmitter=transmitter,args=args)
 
 
-    with closing(client.Scans.stream(host_ouster, args.udp_port,complete=False)) as stream:
+    with closing(client.Scans.stream(host_ouster, args.udp_port,complete=True)) as stream:
         logger.info(f"Streaming lidar data to: Yolov5 using {args.weights}")
          # time 
         
