@@ -74,7 +74,7 @@ class live_stream:
         #print(self.img_size)
         #print(img0.shape)
         img = self.reshape(copy(img0))
-       # print(img.shape)
+       #print(img.shape)
         if len(img.shape) == 3:
             img = img[None]
         #img = img[..., ::-1].transpose((0,3,1,2))  # BGR to RGB, BHWC to BCHW
@@ -89,17 +89,17 @@ class live_stream:
         Args:
             img:
         """
-        img = cv2.resize(img,self.img_size,interpolation=cv2.INTER_LINEAR)
+        img = cv2.resize(img,self.img_size)
         return img
 
 def initialize_network(args,device):
     device = select_device(args.device)
     model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
     stride, names, pt = model.stride, model.names, model.pt
-    imgsz = (args.imgsz, args.imgsz//2) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    imgsz = (640,1280)
+    #imgsz = (args.imgsz, args.imgsz//2) if isinstance(args.imgsz, int) else args.imgsz  # tuple
+    imgsz = (1280,640)
     imgsz = check_img_size(imgsz=imgsz, s=stride)
-    print(imgsz)
+    #print(imgsz)
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
     live = live_stream(classes=names,ip=args.OU_ip,stride=stride,auto=args.auto)
 
@@ -269,6 +269,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args,data_config = parse_config()
     range_limit = [10,10,5]
+    init = True
     cudnn.benchmark = True  # set True to speed up constant image size inference
     #model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
     logger = create_logger()
@@ -281,7 +282,7 @@ def main():
     #live = live_stream(cfg.DATA_CONFIG, cfg.CLASS_NAMES, logger=logger)
     if args.save_csv:
         recorder = CSVRecorder(args.save_name,args.save_dir, cfg.CLASS_NAMES)
-    limits = {"ir":6000,"reflectivity": 255, "range":25000}
+    #limits = {"ir":6000,"reflectivity": 255, "range":25000}
     #limits = {"ir":600, "reflectivity": 255, "range":10000}
     #if range_limit is not None:
     #    cfg.DATA_CONFIG.POINT_CLOUD_RANGE = [-range_limit[0],-range_limit[1],-range_limit[2],range_limit[0],range_limit[1],range_limit[2]]
@@ -314,7 +315,7 @@ def main():
             if log_time:
                 time_logger.start("Ouster Processing")
             # Get lidar data
-            img0 = utils_ouster.ir_ref_range(stream,scan,limits)
+            img0 = utils_ouster.ir_ref_range(stream,scan)
             pcd = utils_ouster.get_xyz(stream,scan)
             img0, img = live.prep(img0)
             if len(img0.shape) == 3:
@@ -322,6 +323,9 @@ def main():
             img = torch.from_numpy(img).to(device)
             img = img.half() if model.fp16 else img.float()  # uint8 to fp16/32
             img_to_vis = copy(img)
+            if init:
+                print(f"Image: {img.shape}")
+                print(f"Img0: {img0.shape}")
             if log_time:
                 time_logger.stop("Ouster Processing")
             
@@ -432,7 +436,9 @@ def main():
             if log_time and args.disp_pred:
                 print("\n")
             #if i == 6:
-            #    break 
+            #    break
+            if init:
+                init = False
             log_time = args.log_time
     if args.transmit:
         transmitter.stop_transmit_udp()

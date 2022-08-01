@@ -1,0 +1,2 @@
+py train.py --img 1280 --batch 8 --rect --epochs 60 --data "Xr-Synthesizer-11/data.yaml" --weights "yolov5x6.pt" --cache "disk" --hyp .\evolve\evolve\Moist-Wind-evolve\hyp_evolve.yaml --save-period 5 --workers 6 --name "Reborned-Moist-Wind" --resume;
+py train.py --img 1280 --batch 10 --rect --epochs 300 --data "Xr-Synthesizer-11/data.yaml" --weights ' ' --cache "disk" --hyp "data/hyps/hyp.scratch-high.yaml" --save-period 40 --workers 6 --name "Scratch" ;

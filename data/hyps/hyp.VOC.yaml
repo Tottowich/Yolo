@@ -10,9 +10,9 @@
 #              0.87729,              0.85125,              0.91286,              0.72664,            0.0076739,            0.0042529,            0.0013865
 
 lr0: 0.00334
-lrf: 0.005 #0.15135
+lrf: 0.015135 #0.15135
 momentum: 0.74832
-weight_decay: 0.0005 #25
+weight_decay: 0.00025
 warmup_epochs: 0.5
 warmup_momentum: 0.59462
 warmup_bias_lr: 0.18657

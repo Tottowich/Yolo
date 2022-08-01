@@ -1,5 +1,5 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
-Xr-Synthesizer*/
+Xr-Synthesize*/
 *.ipynb
 runs/
 evolve/
