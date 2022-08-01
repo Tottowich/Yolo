@@ -454,7 +454,7 @@ NuScenes uses the following labels:
     Note: 'pedestrian is predicted as index 9'
     This program uses has been tested with the Ouster OS0-64 sensor.
     Example Input:
-        python3 live_predictions.py --cfg_file 'cfgs/nuscenes_models/cbgs_voxel0075_res3d_centerpoint.yaml' --ckpt "../checkpoints/cbgs_voxel0075_centerpoint_nds_6648.pth" --OU_ip "192.168.200.78" --TD_ip "192.168.200.103" --TD_port 7002  --time 300 --udp_port 7001 --tcp_port 7003 --name "OS0-64" --visualize
+        py live_yolo.py --weights "runs/train/ElephantSnorkeling7/weights/best.pt" --imgsz 1280 --data "Xr-Synthesizer-12/data.yaml" --iou_thres 0.8 --conf_thres 0.5 --OU_ip "192.168.200.78" --visualize --log_time --no-disp_pred --time 1000 --transmit
 
 """
 
