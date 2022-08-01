@@ -170,13 +170,14 @@ def visualize_yolo_2D(pred,pred_dict,img,args,names=None,logger=None):
         annotator = Annotator(img0, line_width=args.line_thickness, example=str(names))
         if len(det):
             height = pred_dict["pred_boxes"][i,5]
+            z = pred_dict["pred_boxes"][i,2]
             #print(img.shape[2:],img.squeeze().permute(1,2,0).shape)
             det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
             
             i = 0
             for *xyxy, conf, cls in reversed(det):
                 c = int(cls)  # integer class
-                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f} {height:.2f}')
+                label = None if args.hide_labels else (names[c] if args.hide_conf else f'{names[c]} {conf:.2f} {z:.2f}')
 
                 i += 1
                 annotator.box_label(xyxy, label, color=colors(c, True))
