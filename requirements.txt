@@ -36,5 +36,7 @@ ipython  # interactive notebook
 psutil  # system utilization
 thop  # FLOPs computation
 albumentations>=1.0.3
+torch==1.13.0+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+torchvision==0.11.0+cu113-f https://download.pytorch.org/whl/torch_stable.html
 # pycocotools>=2.0  # COCO mAP
 #roboflow
