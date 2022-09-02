@@ -5,6 +5,7 @@ import os,sys
 import random
 import argparse
 import numpy as np
+import datetime as dt
 from typing import Union, Tuple
 #import torchvision.transforms as transforms
 """
@@ -22,12 +23,15 @@ from typing import Union, Tuple
         - test folder containing images (png) and labels (txt)
         - data.yaml file with classes and relative directories
 """
+TIME_TAG = f"_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 def get_args():
     parser = argparse.ArgumentParser(description='Converts SuperAnnotate JSON to YOLO format')
     parser.add_argument('--input', type=str, default='input', help='input directory')
     parser.add_argument('--output', type=str, default='output', help='output folder')
+
     parser.add_argument('--train_val_test', nargs='+', type=float, help='Ratios per train, val, test split')
     parser.add_argument('--img_size', nargs='+', type=int, help='Image size of output image')
+    parser.add_argument('--exists_ok', action='store_true', help='If set, will not create new output folder but add to existing')
     args = parser.parse_args()
     assert len(args.train_val_test) == 3, 'Train, val, test split must be provided'
     assert sum(args.train_val_test) == 1, 'Train, val, test split must sum to 1'
@@ -181,49 +185,53 @@ def get_image_labels_yolo(image_name:str, annotations:dict,input_path:str)->str:
     image_size = get_image_size(image)
     return format_box_label(instances, image_size)
 
-def create_output_dir(output_dir:str,):
+def create_output_dir(output_dir:str,exists_ok:bool=False)->list[str]:
     """
+    Args:
+        output_dir: directory to create if it doesn't exist.
+        exists_ok: if True, don't raise an error if the directory already exists.
     Output directory will contain:
-        - train folder containing images (png) and labels (txt)
-        - val folder containing images (png) and labels (txt)
-        - test folder containing images (png) and labels (txt)
-        - data.yaml file with classes and relative directories
+        - train folder containing images (png) and labels (txt).
+        - val folder containing images (png) and labels (txt).
+        - test folder containing images (png) and labels (txt).
+        - data.yaml file with classes and relative directories.
     """
-    assert not os.path.exists(output_dir), f'Output directory already exists @ {output_dir}'
-    os.mkdir(output_dir)
+    assert not os.path.exists(output_dir) or exists_ok and os.path.exists(output_dir), f'Output directory already exists @ {output_dir}'
     train_dir = os.path.join(output_dir, 'train')
     val_dir = os.path.join(output_dir, 'val')
     test_dir = os.path.join(output_dir, 'test')
-    if not os.path.exists(train_dir):
-        os.makedirs(train_dir)
-    if not os.path.exists(val_dir):
-        os.makedirs(val_dir)
-    if not os.path.exists(test_dir):
-        os.makedirs(test_dir)
+    if not exists_ok:
+        os.mkdir(output_dir)
+        if not os.path.exists(train_dir):
+            os.makedirs(train_dir)
+        if not os.path.exists(val_dir):
+            os.makedirs(val_dir)
+        if not os.path.exists(test_dir):
+            os.makedirs(test_dir)
     return train_dir, val_dir, test_dir
 def add_image(image:np.ndarray, image_name:str, output_dir:str)->None:
     """
-        image: image to be saved
-        image_name: name of image
-        output_dir: directory to save image
+        image: image to be saved.
+        image_name: name of image.
+        output_dir: directory to save image.
     """
-    cv2.imwrite(os.path.join(output_dir, image_name), image)
+    cv2.imwrite(os.path.join(output_dir, image_name.split('.')[0]+TIME_TAG+'.png'), image)
 def add_label(label:str, image_name:str, output_dir:str)->None:
     """
-        label: label to be saved
-        image_name: name of image
-        output_dir: directory to save label
+        label: label to be saved.
+        image_name: name of image.
+        output_dir: directory to save label.
     """
-    with open(os.path.join(output_dir, image_name.split('.')[0]+'.txt'), 'w') as f:
+    with open(os.path.join(output_dir, image_name.split('.')[0]+TIME_TAG+'.txt'), 'w') as f:
         f.write(label)
 
 def create_data_yaml(classes_file:str,output_dir:str)->str:
     """
-        classes: dict of classes
-        train_dir: directory of train images
-        val_dir: directory of val images
-        test_dir: directory of test images
-        Returns: path to data.yaml file
+        classes: dict of classes.
+        train_dir: directory of train images.
+        val_dir: directory of val images.
+        test_dir: directory of test images.
+        Returns: path to data.yaml file.
     """
     classes,n_classes = get_classes(classes_file)
     data_yaml = {
@@ -240,8 +248,8 @@ def create_data_yaml(classes_file:str,output_dir:str)->str:
     return data_yaml_path
 def show_image(image:np.ndarray, bboxes:list,img_size)->None:
     """
-        image: image to be shown
-        bboxes: list of [x,y,w,h]
+        image: image to be shown.
+        bboxes: list of [x,y,w,h].
         Show image with bounding box.
     """
     for bbox in bboxes:
@@ -258,7 +266,7 @@ def create_dataset(args):
     """
     Create Yolo formated dataset from SuperAnnotate format.
     Args:
-        args: arguments
+        args: Command line arguments.
     """
     annotation_file, classes_file = get_annotation_classes_paths(args)
     annotations, image_names = get_annotations(annotation_file)
@@ -266,8 +274,7 @@ def create_dataset(args):
     train_set = image_names_split[0]
     val_set = image_names_split[1]
     test_set = image_names_split[2]
-    #resizer = transforms.Resize(args.image_size)
-    train_dir, val_dir, test_dir = create_output_dir(args.output)
+    train_dir, val_dir, test_dir = create_output_dir(args.output,args.exists_ok)
     init = False
     for set,dir in zip([train_set, val_set, test_set], [train_dir, val_dir, test_dir]):
         for image_name in set:
@@ -281,8 +288,8 @@ def create_dataset(args):
                 init = False
             add_image(image, image_name, dir)
             add_label(labels, image_name, dir)
-    data_yaml_path = create_data_yaml(classes_file, args.output)
-if __name__ == "__main__":
+    data_yaml_path = create_data_yaml(classes_file, args.output) 
+if __name__ == "__main__": # Example input: py .\superAnnotateToYolo.py --input .\datasets\SuperAnnotate\TestSVHN --output .\datasets\YoloFormat\TestSVHN --train_val_test 0.5 0.25 0.25 --img_size 448
     args = get_args()   
     create_dataset(args)
 

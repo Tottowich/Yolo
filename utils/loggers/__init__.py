@@ -15,7 +15,7 @@ from utils.loggers.wandb.wandb_utils import WandbLogger
 from utils.plots import plot_images, plot_results
 from utils.torch_utils import de_parallel
 
-LOGGERS = ('csv', 'tb', 'wandb')  # text-file, TensorBoard, Weights & Biases
+LOGGERS = ('csv', 'tb')#, 'wandb')  # text-file, TensorBoard, Weights & Biases
 RANK = int(os.getenv('RANK', -1))
 
 try:

@@ -244,10 +244,7 @@ def main():
     args, data_config = parse_config()
     init = True
     cudnn.benchmark = True  # set True to speed up constant image size inference
-    #model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=args.half)
-    model,names,device,live,pred_tracker,transmitter, time_logger, logger = initialize_network(args)
-    # if args.OU_ip is None and args.name is None:
-    #     raise ValueError('Please specify the ip or sensor name of the ')
+    model, names, device, live,pred_tracker,transmitter, time_logger, logger = initialize_network(args)
     
     log_time = False # False to let the program run for one loop to warm up :)
 
