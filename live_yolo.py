@@ -28,13 +28,10 @@ from tools.transmitter import Transmitter
 from models.common import DetectMultiBackend
 from tools.boliden_utils import (disp_pred, visualize_yolo_2D,create_logger, TimeLogger, PredictionsTracker,
                                  create_logging_dir,scale_preds)
-#from tools.xr_synth_utils import CSVRecorder,TimeLogger,filter_predictions,format_predictions,display_predictions
-# from tools.xr_synth_utils import create_logger,proj_and_format, proj_alt
+
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-# from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
-# from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
 class LiveStream:
     """
     Class to stream data from a Sensor.
@@ -67,13 +64,9 @@ class LiveStream:
         Args:
             img0: The image that is to be prepared.
         """
-        #print(self.img_size)
-        #print(img0.shape)
         img = self.reshape(copy(img0))
-       #print(img.shape)
         if len(img.shape) == 3:
             img = img[None]
-        #img = img[..., ::-1].transpose((0,3,1,2))  # BGR to RGB, BHWC to BCHW
         img = img.transpose((0,3,1,2))  # BGR to RGB, BHWC to BCHW
         
         img = np.ascontiguousarray(img)

@@ -123,24 +123,50 @@ def split_image_names(image_names:list,args)->list[list]:
         Returns: list of lists of image names
     """
     n_images = len(image_names)
-    n_train = int(n_images*args.train_val_test[0])
-    n_val = int(n_images*args.train_val_test[1])
-    n_test = int(n_images*args.train_val_test[2])
+    n_train = int(n_images*args.train_val_test[0]) # Number of images in train set
+    n_val = int(n_images*args.train_val_test[1]) # Number of images in val set
+    n_test = int(n_images*args.train_val_test[2]) # Number of images in test set
     train_names = image_names[:n_train]
     val_names = image_names[n_train:n_train+n_val]
     test_names = image_names[n_train+n_val:]
     return [train_names, val_names, test_names], [n_train, n_val, n_test]
 
 def get_image_path(image_name:str, input_dir:str)->str:
+    """
+    Args:
+        image_name: name of image
+        input_dir: input directory
+    Output:
+        image_path: path to image
+    """
     return os.path.join(input_dir, 'images', image_name)
 
 def get_image(image_path:str)->np.ndarray:
+    """
+    Args:
+        image_path: path to image
+    Output:
+        image: image as numpy array #(H,W,C) BGR
+    """
     return cv2.imread(image_path)
 
 def get_image_size(image:np.ndarray)->Tuple[int,int]:
+    """
+    Args:
+        image: image as numpy array #(H,W,C) BGR
+    Output:
+        image_size: image size (H,W)
+    """
     return image.shape[:2]
 
 def get_image_labels(image_name:str, annotations:dict)->str:
+    """
+    Args:
+        image_name: name of image
+        annotations: dict of annotations
+    Output:
+        image_labels: image labels
+    """
     return annotations[image_name]['instances']
 def xyxy2xywh(xyxy:list)->list:
     """
@@ -154,6 +180,13 @@ def xyxy2xywh(xyxy:list)->list:
     y = y1+h/2
     return x,y,w,h
 def resize_image(image:np.ndarray, img_size:list)->np.ndarray:
+    """
+    Args:
+        image: image as numpy array #(H,W,C) BGR
+        img_size: image size (H2,W2)
+    Output:
+        image: image as numpy array #(H2,W2,C) BGR
+    """
     return cv2.resize(image, (img_size[0], img_size[1]))
 def format_box_label(instances:list[dict], image_size:Tuple[int,int])->Tuple[str,list]:
     """
