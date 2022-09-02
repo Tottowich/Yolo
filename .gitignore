@@ -1,6 +1,7 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 yolo_env*
 Xr-Synthesize*/
+datasets/*
 *.ipynb
 runs/
 evolve/
