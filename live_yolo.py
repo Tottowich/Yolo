@@ -98,11 +98,11 @@ def initialize_network(args):
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
     imgsz = check_img_size(imgsz=imgsz, s=stride)
-    #model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
+    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
 
     # Create file to save logs to.
     if args.save_time_log:
-        dir_path = create_logging_dir(args.name_run,ROOT / "logs")
+        dir_path = create_logging_dir(args.name_run,ROOT / "logs",args)
     else:
         dir_path = None
     # Horror video = https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies
@@ -142,6 +142,8 @@ def initialize_timer(time_logger:TimeLogger,args,transmitter:Transmitter=None):
     
     time_logger.create_metric("Pre Processing")
     time_logger.create_metric("Infrence")
+    if args.cpu_post:
+        time_logger.create_metric("Reloading CPU")
     time_logger.create_metric("Post Processing")
     if args.visualize:
         time_logger.create_metric("Visualize")
@@ -217,6 +219,7 @@ def parse_config():
         parser.add_argument('--pcd_vis', action=argparse.BooleanOptionalAction)
         parser.add_argument('--webcam', action=argparse.BooleanOptionalAction)
         parser.add_argument('--log_all', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--cpu_post', action=argparse.BooleanOptionalAction)
     else:
         parser.add_argument('--visualize', action='store_true')
         parser.add_argument('--no-visualize', dest='visualize', action='store_false')
@@ -254,7 +257,7 @@ def main():
     logger.info(f"Infrence run stored @ ./logs/{args.name_run}")
     logger.info(f"Streaming data to: Yolov5 using {args.weights}")
     start_stream = time.monotonic()
-    t1           = time.monotonic()
+    t1 = time.monotonic()
 
     if args.prog_bar:
         pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar}|[{elapsed}<{remaining}")
@@ -292,14 +295,19 @@ def main():
         
         if log_time:
             time_logger.start("Infrence")
-        pred = model(img,augment=args.augment)
+        pred = model(img,augment=args.augment) # Inference + Loading to CPU for post processing
         if log_time:
             time_logger.stop("Infrence")
-        
+        if args.cpu_post and device != torch.device("cpu"):
+            if log_time:
+                time_logger.start("Reloading CPU")
+            pred = pred.cpu()
+            if log_time:
+                time_logger.stop("Reloading CPU")
         if log_time:
             time_logger.start("Post Processing")
-        if device == torch.device("mps"): # Torchvision.ops.nms has not been implemented on MPS. REMOVE WHEN IMPLEMENTED
-            pred = pred.cpu()
+        # if device == torch.device("mps") or device == torch.device("cuda"): # Torchvision.ops.nms has not been implemented on MPS. REMOVE WHEN IMPLEMENTED
+        #     pred = pred.cpu()
         pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, args.classes, args.agnostic_nms, max_det=args.max_det)
         pred = scale_preds(preds=pred, img0=img0,img=img)
         if log_time:
@@ -336,6 +344,76 @@ def main():
     if log_time:
         time_logger.summarize()
     logger.info("Stream Done")
+@torch.no_grad() # No grad to save memory
+def main_clean():
+    args, data_config = parse_config()
+    init = True
+    cudnn.benchmark = True  # set True to speed up constant image size inference
+    model, names, device, live, pred_tracker, transmitter, time_logger, logger = initialize_network(args)
+    
+    log_time = False # False to let the program run for one loop to warm up :)
+
+
+    logger.info(f"Infrence run stored @ ./logs/{args.name_run}")
+    logger.info(f"Streaming data to: Yolov5 using {args.weights}")
+    start_stream = time.monotonic()
+    t1 = time.monotonic()
+
+    if args.prog_bar:
+        pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar}|[{elapsed}<{remaining}")
+    for i,(path, img, img0, vid_cap, s) in enumerate(live):       
+        img0 = img0[0]
+        if log_time:
+            time_logger.start("Internal Pipeline")
+        if args.prog_bar:
+            t2 = time.monotonic()
+            pbar.update((t2 - t1))
+            pbar.refresh()
+            t1 = t2
+        if init:
+            if logger is not None:
+                logger.info(f"Image size: {img.shape}")
+                logger.info(f"img0 size: {img0.shape}")
+                pred_tracker.img_size = img.shape[2:]
+                pred_tracker.img0_size = img0.shape
+
+        img = torch.from_numpy(img).to(device)
+        img = img.half() if args.half else img.float()  # uint8 to fp16/32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        if len(img.shape) == 3:
+            img = img.unsqueeze(0)
+        if i%2 == 0 and log_time:
+            time_logger.start("Full Pipeline")
+        if i%2 == 1 and log_time and i != 1:
+            time_logger.stop("Full Pipeline")
+        pred = model(img,augment=args.augment) # Inference + Loading to CPU for post processing
+        
+        if args.cpu_post and device != torch.device("cpu"):          
+            pred = pred.cpu()
+            
+        pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, args.classes, args.agnostic_nms, max_det=args.max_det)
+        pred = scale_preds(preds=pred, img0=img0,img=img)
+
+        if args.visualize:
+
+            visualize_yolo_2D(pred,img0 = img0,img=img,args=args,names=names)     
+
+
+        if args.track:
+            pred_tracker.update(pred,img0,img)
+        if init:
+            init = False
+        log_time = args.log_time
+        if time.monotonic()-start_stream > args.time:
+            pbar.n = pbar.total
+            pbar.refresh()
+            break
+    if args.transmit:
+        transmitter.stop_transmit_udp()
+        transmitter.stop_transmit_ml()
+    if log_time:
+        time_logger.summarize()
+    logger.info("Stream Done")
 
 """
 Example Input:
@@ -343,5 +421,6 @@ Example Input:
 """
 
 if __name__ == '__main__':
-    main()
+    #main()
+    main_clean()
 

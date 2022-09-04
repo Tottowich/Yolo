@@ -1,6 +1,7 @@
 import os
 import cv2
 import time
+import yaml
 import torch
 import logging
 import numpy as np
@@ -195,7 +196,7 @@ class TimeLogger:
         
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nSum of parts: {sum_ave:.3e} <=> {1/sum_ave:.3e} Hz s\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")
         if self.save_log:
@@ -379,12 +380,13 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     logger.propagate = False
     return logger
 
-def create_logging_dir(run_name:str,log_dir:str)->str:
+def create_logging_dir(run_name:str,log_dir:str,args)->str:
     """
     Create a directory for the logs.
     Args:
         run_name: Name of the run.
         log_dir: Directory where the logs are stored.
+        args: Arguments of the run.
     Returns:
         log_dir: Directory where the logs are stored.
     """
@@ -393,6 +395,9 @@ def create_logging_dir(run_name:str,log_dir:str)->str:
     log_dir = os.path.join(log_dir, run_name)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+    # Write the arguments to a file
+    with open(os.path.join(log_dir, 'args.yaml'), 'w') as f:
+        yaml.dump(args, f)
     return log_dir
 def scale_preds(preds:np.ndarray,img0:np.ndarray,img:torch.Tensor,filter:bool=False,classes_to_keep:list[int]=None)->np.ndarray:
     """

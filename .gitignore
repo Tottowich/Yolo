@@ -1,7 +1,6 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 yolo_env*
 Xr-Synthesize*/
-datasets/*
 *.ipynb
 runs/
 evolve/
@@ -33,7 +32,7 @@ best_weights/
 storage.googleapis.com
 runs/*
 data/*
-datasets/*
+datasets/*/*
 data/images/*
 !data/*.yaml
 !data/hyps
