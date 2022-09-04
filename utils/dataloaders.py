@@ -283,13 +283,13 @@ class LoadWebcam:  # for inference
         img_path = 'webcam.jpg'
         s = f'webcam {self.count}: '
 
-        # Padded resize
+        # Padded resize)
         img = letterbox(img0, self.img_size, stride=self.stride)[0]
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
-
+        print("image shape", img.shape)
         return img_path, img, img0, None, s
 
     def __len__(self):
@@ -371,7 +371,6 @@ class LoadStreams:
         # Letterbox
         img0 = self.imgs.copy()
         img = [letterbox(x, self.img_size, stride=self.stride, auto=self.rect and self.auto)[0] for x in img0]
-
         # Stack
         img = np.stack(img, 0)
 

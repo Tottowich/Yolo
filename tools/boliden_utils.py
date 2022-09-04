@@ -315,8 +315,8 @@ class PredictionsTracker:
                     cv2.putText(img0_cut,f"{combined_score:.2f}",(10,30),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
                     # Add text to the image with the score top left corner
                     cv2.waitKey(1)
-
-                self.best_score = combined_score
+                # self.best_score = combined_score Previous version used the combined score as the best score
+                self.best_score = self.scores[best_index]
                 self.best_frame = img0_cut
                 self.previous_tracked_class = largest_attributes["class"]
                 # im = Image.fromarray(cv2.cvtColor(img0_cut, cv2.COLOR_BGR2RGB))

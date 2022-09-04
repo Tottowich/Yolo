@@ -4,6 +4,8 @@ import math
 import yaml
 import torch
 import os, sys
+# os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+# PYTORCH_ENABLE_MPS_FALLBACK=1
 import argparse
 import threading
 from re import S
@@ -23,7 +25,7 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
 from contextlib import closing
 import torch.backends.cudnn as cudnn
-from utils.dataloaders import LoadStreams
+from utils.dataloaders import LoadStreams, LoadWebcam
 from tools.transmitter import Transmitter
 from models.common import DetectMultiBackend
 from tools.boliden_utils import (disp_pred, visualize_yolo_2D,create_logger, TimeLogger, PredictionsTracker,
@@ -103,13 +105,18 @@ def initialize_network(args):
         dir_path = create_logging_dir(args.name_run,ROOT / "logs")
     else:
         dir_path = None
-    live = LoadStreams(sources="https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies",img_size=imgsz,stride=stride,auto=args.auto)
+    # Horror video = https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies
+    source = "0" if args.webcam else "https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies"
+    live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto)
+
     pred_tracker = PredictionsTracker(frames_to_track=args.frames_to_track,
                                       img_size=imgsz,
                                       threshold=args.tracker_thresh,
                                       visualize=args.visualize,
-                                      )
-    logger = create_logger()
+                                    )
+    log_file = None if not args.log_all else dir_path / "full_log.txt"
+
+    logger = create_logger(log_file=log_file)
     if args.transmit:
         transmitter = Transmitter(reciever_ip=args.TD_ip, reciever_port=args.TD_port)
         transmitter.start_transmit_udp()
@@ -207,7 +214,9 @@ def parse_config():
         parser.add_argument('--disp_pred', action=argparse.BooleanOptionalAction)
         parser.add_argument('--disp_time', action=argparse.BooleanOptionalAction)
         parser.add_argument('--transmit', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--pcd_vis', action=argparse.BooleanOptionalAction)     
+        parser.add_argument('--pcd_vis', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--webcam', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--log_all', action=argparse.BooleanOptionalAction)
     else:
         parser.add_argument('--visualize', action='store_true')
         parser.add_argument('--no-visualize', dest='visualize', action='store_false')
@@ -237,7 +246,7 @@ def main():
     args, data_config = parse_config()
     init = True
     cudnn.benchmark = True  # set True to speed up constant image size inference
-    model, names, device, live,pred_tracker,transmitter, time_logger, logger = initialize_network(args)
+    model, names, device, live, pred_tracker, transmitter, time_logger, logger = initialize_network(args)
     
     log_time = False # False to let the program run for one loop to warm up :)
 
@@ -286,9 +295,11 @@ def main():
         pred = model(img,augment=args.augment)
         if log_time:
             time_logger.stop("Infrence")
-
+        
         if log_time:
             time_logger.start("Post Processing")
+        if device == torch.device("mps"): # Torchvision.ops.nms has not been implemented on MPS. REMOVE WHEN IMPLEMENTED
+            pred = pred.cpu()
         pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, args.classes, args.agnostic_nms, max_det=args.max_det)
         pred = scale_preds(preds=pred, img0=img0,img=img)
         if log_time:
@@ -316,6 +327,8 @@ def main():
             time_logger.stop("Internal Pipeline")
         log_time = args.log_time
         if time.monotonic()-start_stream > args.time:
+            pbar.n = pbar.total
+            pbar.refresh()
             break
     if args.transmit:
         transmitter.stop_transmit_udp()
