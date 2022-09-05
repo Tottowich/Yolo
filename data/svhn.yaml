@@ -11,6 +11,6 @@ names:
 - '9'
 nc: 10
 path: datasets/YoloFormat/svhn
-test: test_data/test_with_labels/
-train: train_with_labels/train_w_labels/
-val: test_data/test_with_labels/
+test: test/
+train: train/
+val: test/

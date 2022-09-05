@@ -25,10 +25,10 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
 from contextlib import closing
 import torch.backends.cudnn as cudnn
-from utils.dataloaders import LoadStreams, LoadWebcam
+from utils.dataloaders import LoadStreams, LoadWebcam, LoadImages
 from tools.transmitter import Transmitter
 from models.common import DetectMultiBackend
-from tools.boliden_utils import (disp_pred, visualize_yolo_2D,create_logger, TimeLogger, PredictionsTracker,
+from tools.boliden_utils import (disp_pred, visualize_yolo_2D,create_logger, TimeLogger, RegionPredictionsTracker,
                                  create_logging_dir,scale_preds)
 
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
@@ -106,10 +106,14 @@ def initialize_network(args):
     else:
         dir_path = None
     # Horror video = https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies
-    source = "0" if args.webcam else "https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies"
-    live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto)
+    source = args.source if args.source is not None else "0" if args.webcam else "https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies"
+    # Check if file
+    if os.path.isfile(source):
+        live = LoadImages(path=source,img_size=imgsz,stride=stride,auto=args.auto)
+    else:
+        live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto)
 
-    pred_tracker = PredictionsTracker(frames_to_track=args.frames_to_track,
+    pred_tracker = RegionPredictionsTracker(frames_to_track=args.frames_to_track,
                                       img_size=imgsz,
                                       threshold=args.tracker_thresh,
                                       visualize=args.visualize,
@@ -172,6 +176,7 @@ def parse_config():
     #parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
     #                    help='specify the config for demo')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path(s)')
+    parser.add_argument('--source', type=str, default=None, help='model path(s)')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=1280, help='inference size h,w')
     parser.add_argument('--data', type=str, default=ROOT / 'data/Argoverse.yaml', help='(optional) dataset.yaml path')
     parser.add_argument('--max_det', type=int, default=1000, help='maximum detections per image')
@@ -262,7 +267,7 @@ def main():
     if args.prog_bar:
         pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar}|[{elapsed}<{remaining}")
     for i,(path, img, img0, vid_cap, s) in enumerate(live):       
-        img0 = img0[0]
+        img0 = img0[0] if args.webcam else img0
         if log_time:
             time_logger.start("Internal Pipeline")
         if args.prog_bar:
@@ -421,6 +426,6 @@ Example Input:
 """
 
 if __name__ == '__main__':
-    #main()
-    main_clean()
+    main()
+    #main_clean()
 

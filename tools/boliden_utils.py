@@ -204,7 +204,7 @@ class TimeLogger:
     
 
 
-class PredictionsTracker:
+class RegionPredictionsTracker:
     """
     Track the 'n' previous frame's largest predictions.
     Calculates a score across the sequence of predictions made by calculating the certainty
@@ -213,8 +213,12 @@ class PredictionsTracker:
     If average score across the sequence is above a threshold, the prediction is considered a success and passed along the pipeline.\n
     Args:
         frames_to_track: number of frames to track.
-        img_size: size of the image.
-        threshold: When to be satisfied with the average score of a prediction sequence.
+        img_size: size of the image the predictions where made in.
+        img0_size: size of the original image.
+        threshold: threshold to determine if the prediction sequence is a success.
+        visualize: if True, will display the tracked predictions.
+        sequence_patience: time in seconds to allow seperated best frames may be considered part of the same sequence.
+
     """
     def __init__(self,
                     frames_to_track:int,
@@ -222,6 +226,7 @@ class PredictionsTracker:
                     img0_size:Union[tuple,int]=None,
                     threshold:float=0.5,
                     visualize:bool=False,
+                    sequence_patience:int=5,
                 ) -> None:
         assert frames_to_track > 0, "frames_to_track must be greater than 0."
         assert img_size is not None, "img_size must be specified."
@@ -424,3 +429,17 @@ def scale_preds(preds:np.ndarray,img0:np.ndarray,img:torch.Tensor,filter:bool=Fa
             preds[i] = pred
             count += 1
     return preds#[:count]
+
+class DigitPredictionTracker:
+    """
+    Class to track the predictions of digits.
+    """
+    def __init__(self,frames_to_track:int=5,threshold:float=0.5,visualize:bool=False):
+        """
+        Args:
+            frames_to_track: Number of frames to track.
+            threshold: Threshold for the combined score.
+            visualize: Visualize the best frame.
+        """
+        self.frames_to_track = frames_to_track
+        self.threshold = threshold

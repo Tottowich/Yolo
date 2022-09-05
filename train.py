@@ -329,9 +329,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
-            if init:
-                print(f"Image size: {imgs.shape[2]}x{imgs.shape[3]}, {imgs.shape}")
-                init = False
             # Warmup
             if ni <= nw:
                 xi = [0, nw]  # x interp
