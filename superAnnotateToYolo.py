@@ -110,7 +110,7 @@ def get_annotations(annotations_file: str)->Tuple[dict,list]:
     with open(annotations_file) as f:
         data = json.load(f)
         for image_name in data:
-            if not image_name.endswith('.png'):
+            if not image_name.endswith('.png') and not image_name.endswith('.jpg'):
                 continue
             annotations[image_name] = data[image_name]
             image_names.append(image_name)
@@ -302,17 +302,19 @@ def create_dataset(args):
         args: Command line arguments.
     """
     annotation_file, classes_file = get_annotation_classes_paths(args)
+    print("Annotation file: ", annotation_file)
     annotations, image_names = get_annotations(annotation_file)
+    print(annotations)
     image_names_split, n_images_split = split_image_names(image_names, args)
     train_set = image_names_split[0]
     val_set = image_names_split[1]
     test_set = image_names_split[2]
+    print(f"Creating dataset with {n_images_split[0]} train images, {n_images_split[1]} val images and {n_images_split[2]} test images.")
     train_dir, val_dir, test_dir = create_output_dir(args.output,args.exists_ok)
     init = False
     for set,dir in zip([train_set, val_set, test_set], [train_dir, val_dir, test_dir]):
         for image_name in set:
             image_path = get_image_path(image_name, args.input)
-            print(image_path)
             image = get_image(image_path)
             labels, bboxes = get_image_labels_yolo(image_name, annotations, args.input)
             image = resize_image(image, args.img_size)

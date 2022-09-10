@@ -197,6 +197,7 @@ class LoadImages:
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
         self.auto = auto
+        self.start = 0
         if any(videos):
             self.new_video(videos[0])  # new video
         else:
@@ -205,7 +206,7 @@ class LoadImages:
                             f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
 
     def __iter__(self):
-        self.count = 0
+        self.count = self.start
         return self
 
     def __next__(self):
