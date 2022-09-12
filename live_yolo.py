@@ -29,7 +29,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
 import torch.backends.cudnn as cudnn
 # from utils.dataloaders import LoadStreams, LoadWebcam, LoadImages
 # from models.common import DetectMultiBackend
-from tools.boliden_utils import (disp_pred, visualize_yolo_2D,scale_preds,initialize_digit_model,initialize_network,initialize_timer, wait_for_input)
+from tools.boliden_utils import (disp_pred, visualize_yolo_2D,scale_preds,initialize_digit_model,initialize_network,initialize_timer, wait_for_input,ProgBar)
 
 from utils.general import non_max_suppression
                         #     ,(LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
@@ -55,12 +55,14 @@ def main(args: argparse.Namespace=None) -> None:
     logger.info(f"Infrence run stored @ ./logs/{args.name_run}")
     logger.info(f"Streaming data to: Yolov5 using {args.weights}")
     start_stream = time.monotonic()
+
     if args.prog_bar:
-        if args.time > 0:
-            t1 = time.monotonic() # Time to keep track of FPS count when using progress bar 
-            pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar}|[{elapsed}<{remaining}",leave=True)
-        else:
-            pbar = tqdm(total=len(live),bar_format = "{desc}: {percentage:.3f}%|{bar}|[{elapsed}<{remaining}",leave=True)
+        pbar = ProgBar(live.is_live,args.time)
+        # if args.time > 0:
+        #     t1 = time.monotonic() # Time to keep track of FPS count when using progress bar 
+        #     pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar:30}|[{elapsed}<{remaining}]",leave=True)
+        # else:
+        #     pbar = tqdm(total=len(live),bar_format = "{desc}: [{elapsed}<{remaining}]",leave=True)
         
     
     # multidirs = os.listdir("./datasets/Examples/Sequences/")
@@ -70,26 +72,32 @@ def main(args: argparse.Namespace=None) -> None:
         img0 = img0[0] if args.webcam else img0
         if log_time:
             time_logger.start("Internal Pipeline")
-        if args.prog_bar:
-            if args.time > 0:
-                t2 = time.monotonic()
-                pbar.update((t2 - t1))
-                pbar.bar_format = "{desc}: {percentage:.1f}%|{bar:10}|[{elapsed}<{remaining}]"
-                pbar.set_description(str(f"Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(t2 - start_stream))}|FPS: {(1/(t2-t1+EPS)):.3f}|"))
-                pbar.refresh()
-                t1 = t2
+        if args.prog_bar and not init:
+            if args.webcam:
+                pbar.step()
+                # t2 = time.monotonic()
+                # pbar.update((t2 - t1))
+                # if args.time > 0:
+                #     pbar.bar_format = "{desc}: {percentage:.1f}%|{bar:10}|[{elapsed}<{remaining}]"
+                # else:
+                #     pbar.bar_format = "{desc}"
+                # pbar.set_description(str(f"Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(t2 - start_stream))}| FPS: {(1/(t2-t1+EPS)):.1f}|"))
+                # pbar.refresh()
+                # t1 = t2
             else:
-                pbar.update(1)
-                pbar.refresh()
-        if init:
-            if args.verbose:
-                logger.info(f"Image size: {img.shape}")
-                logger.info(f"img0 size: {img0.shape}")
+                pbar.step()
+                # pbar.update(1)
+                # pbar.refresh()
         if log_time:
             time_logger.start("Pre Processing")
         img = torch.from_numpy(img).to(device)
         img = img.half() if args.half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        if init:
+            t1 = time.monotonic()
+            if args.verbose:
+                logger.info(f"Image size: {img.shape}")
+                logger.info(f"img0 size: {img0.shape}")
         if log_time:
             time_logger.stop("Pre Processing")
         if len(img.shape) == 3:
@@ -122,7 +130,7 @@ def main(args: argparse.Namespace=None) -> None:
         if args.visualize:
             if log_time:
                 time_logger.start("Visualize")
-            visualize_yolo_2D(pred,img0 = img0,img=img,args=args,names=names,wait=False,line_thickness=3,classes_not_to_show=[0])     
+            visualize_yolo_2D(pred,img0 = img0,img=img,args=args,names=names,line_thickness=3,classes_not_to_show=[0])     
             if log_time:
                 time_logger.stop("Visualize")
 
@@ -156,7 +164,7 @@ def main(args: argparse.Namespace=None) -> None:
         if time.monotonic()-start_stream > args.time and args.time != -1:
             if args.prog_bar:
                 pbar.n = pbar.total
-                pbar.refresh()
+                pbar.close()
             break
         if args.wait:
             wait_for_input(live=live,args=args)

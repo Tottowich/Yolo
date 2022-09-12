@@ -1,7 +1,9 @@
 from ast import For
 from dataclasses import dataclass,field
+from functools import total_ordering
 from multiprocessing.spawn import import_main_path
 import os
+from pickletools import float8
 import re
 import sys
 from tabnanny import verbose
@@ -17,13 +19,14 @@ import pandas as pd
 from PIL import Image
 import torch.nn as nn
 from copy import copy
+from tqdm import tqdm
 from datetime import datetime
 import matplotlib.pyplot as plt
 from colorama import Fore, Style
 # if __name__=="__main__":
 from pathlib import Path
 FILE = Path(__file__).resolve()
-ROOT = FILE.parents[0]
+ROOT = FILE.parents[0 if __name__ != "__main__" else 1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT)) # Add ROOT
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))
@@ -36,7 +39,13 @@ from utils.torch_utils import select_device, time_sync
 from utils.general import non_max_suppression
 from utils.plots import Annotator, colors, save_one_box
 from typing import Dict, Union, Tuple, Optional,Dict,TypeVar
-EPS = 1e-9
+# FALLBACK LIST OF POSSIBLE COMBINATIONS IF FILE WITH COMBINATIONS IS NOT PROVIDED
+LIST_OF_COMB = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1505","1506",
+                "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606",
+                "166","1607","1608","1609","1610","196","197","198","1910","2103","2104","2105","2106","2108",
+                "1611","1612","1613","1614","1615","1616","1617","1619","1623","1625","1625","191","193","195"]
+                
+EPS = 1e-7
 OFFSET = 30 # ,30]
 def xyxy2xywh(xyxy:tuple)->tuple:
     x1,y1,x2,y2 = xyxy
@@ -100,12 +109,11 @@ def visualize_yolo_2D(pred:np.ndarray,
                     names:list[str]=None,
                     rescale:bool=False,
                     img:torch.Tensor=None,
-                    wait:bool=False,
                     line_thickness:int=1, 
                     hide_labels:bool=False, 
                     hide_conf:bool=False,
                     classes_not_to_show:list[int]=None,
-                    image_name:str="Object Predicitions")->None:
+                    image_name:str="Object Predicitions")->str:
     """
     Visualize the predictions.\n
     Args:
@@ -115,6 +123,15 @@ def visualize_yolo_2D(pred:np.ndarray,
         img: Image predictions where based upon. # Shape: (1,3,H,W).\n
         args: Arguments from the command line.\n
         names: Names of the classes.\n
+        rescale: Rescale the predictions.\n
+        line_thickness: Thickness of the bounding box.\n
+        hide_labels: Hide the labels.\n
+        hide_conf: Hide the confidence.\n
+        classes_not_to_show: Classes not to show.\n
+        image_name: Name of the image.\n
+    Returns:
+        class_string: String of predicted classes sorted by min x value (left->right in image).\n
+
     """
     class_string = None
     if rescale:
@@ -127,7 +144,6 @@ def visualize_yolo_2D(pred:np.ndarray,
         assert hide_conf is not None, "Hide confidence is not passed"
     if rescale:
         assert img is not None, "Image is not passed"
-    # img0 = img0.copy()
     for i,det in enumerate(pred):
         
         #img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
@@ -155,8 +171,6 @@ def visualize_yolo_2D(pred:np.ndarray,
                 class_string += f"{names[classes[id]]}"
                 pos_x.pop(id)
                 classes.pop(id)
-            #img0 = cv2.cvtColor(img0,cv2.COLOR_RGB2BGR)
-            # cv2.putText(img0,class_string,(int(30),int(30)),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
             cv2.imshow(image_name,cv2.resize(img0,(640,int(640/img0.shape[1]*img0.shape[0]))))
             cv2.waitKey(1)
         else:
@@ -175,7 +189,6 @@ class TimeLogger:
         name: name of the timelogger.
     """
     def __init__(self,logger=None,disp_log=False,save_log=False,path="timelogger"):
-        super().__init__()
         self.time_dict = {}
         self.time_pd = None
         self.metrics_pd = None
@@ -221,22 +234,42 @@ class TimeLogger:
         self.time_dict[name]["times"].append(self.time_dict[name]["stop"] - self.time_dict[name]["start"])
         if self.print_log:
             self.output_log(name)
-    def log_time(self, name: str, _time: float):
-        self.time_dict[name]["times"].append(_time)
+    def log_time(self, name: str, time_: float):
+        """
+        Log time manually.
+        Args:
+            name: name of the metric.
+            _time: time to log.
+        """
+        self.time_dict[name]["times"].append(time_)
     def maximum_time(self, name: str):
+        """
+        Get the maximum time taken for a step of given the name of that timing.
+        Args:
+            name: name of the step.
+        """
         if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
             return max(self.time_dict[name]["times"])
         return 0
     def minimum_time(self, name: str):
+        """
+        Get the minimum time taken for a step of given the name of that timing.
+        """
         if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
             return min(self.time_dict[name]["times"])
         return 0
     def average_time(self, name: str):
+        """
+        Get the average time taken for a step of given the name of that timing sequence.
+        """
         if self.time_dict[name]["times"] is not None and len(self.time_dict[name]["times"])>0:
             return np.mean(self.time_dict[name]["times"])
         return 0
    
     def summarize(self):
+        """
+        Summarize the time taken for each step as well as metrics: maximum, minimum, average.
+        """
         time_averages = {}
         time_max = {}
         time_min = {}
@@ -349,9 +382,15 @@ def scale_preds(preds:list[Union[torch.Tensor,np.ndarray]],img0:np.ndarray,img:t
     return preds#[:count]
 
 def numpy_to_tuple(arr:np.ndarray)->tuple:
+    """
+    Convert a numpy array to a tuple.
+    """
     return tuple(arr.tolist())
 
 def load_img(path:str)->np.ndarray:
+    """
+    Load an image as a numpy array. Shape: (H,W,C) in RGB.
+    """
     img = cv2.imread(path)
     img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     return img
@@ -359,9 +398,9 @@ def to_gray(img:np.ndarray)->np.ndarray:
     """
     Make gray scale image with RGB values.
     Args:
-        img: Image to make gray scale.
+        img: Image to make gray scale. Shape (H,W,C).
     Returns:
-        Gray scale image.
+        Gray scale image with 3 Channels.
     """
     img = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
     img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
@@ -371,12 +410,13 @@ def increase_contrast(img:np.ndarray)->np.ndarray:
     """
     Increase contrast of image.
     Args:
-        img: Image to increase contrast of.
+        img: Image to increase contrast of. Shape: (H,W,C) BGR.
     Returns:
-        Image with increased contrast.
+        Image with increased contrast. Shape: (H,W,C) RGB.
     """
     img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=2,tileGridSize=(8,8))
+
     img = clahe.apply(img)
     img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
     return img
@@ -384,7 +424,7 @@ def initialize_yolo_model(args):
     """
     Initialize YOLO model.
     Args:
-        args: Arguments.
+        args: Arguments specified under tools/arguments.py using parse_config()
     Returns:
         YOLO model.
     """
@@ -434,7 +474,7 @@ def initialize_network(args):
     log_file = None if not args.log_all else dir_path / "full_log.txt"
 
     logger = create_logger(log_file=log_file)
-    from ObjectTracker import RegionPredictionsTracker
+    from ObjectTracker import RegionPredictionsTracker # Import here to avoid circular import.
     pred_tracker = RegionPredictionsTracker(frames_to_track=args.object_frames,
                                       img_size=imgsz,
                                       threshold=args.tracker_thresh,
@@ -444,9 +484,10 @@ def initialize_network(args):
                                       logger=logger,
                                       )
     if args.transmit:
-        transmitter = Transmitter(reciever_ip=args.ip, reciever_port=args.port)
-        transmitter.start_transmit_udp()
-        transmitter.start_transmit_ml()
+        # transmitter = Transmitter(reciever_ip=args.ip, reciever_port=args.port)
+        # transmitter.start_transmit_udp()
+        # transmitter.start_transmit_ml()
+        raise NotImplementedError("Transmitter not implemented yet.")
     else:
         transmitter = None
     if args.log_time:
@@ -458,7 +499,7 @@ def initialize_network(args):
     else:
         time_logger = None
     return model, names, device, live, pred_tracker,transmitter, time_logger, logger
-def initialize_timer(time_logger:TimeLogger,args,transmitter:Transmitter=None):
+def initialize_timer(time_logger:TimeLogger,args,transmitter=None):
     """
     Args:
         time_logger: The logger object to log the time taken by various parts of the pipeline.
@@ -496,7 +537,7 @@ def initialize_digit_model(args,logger=None):
     imgsz = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
     imgsz = check_img_size(imgsz=imgsz, s=stride)
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    from DigitDetector import DigitDetector
+    from DigitDetector import DigitDetector # Import here to avoid circular import.
     dd = DigitDetector(model=model,
                         img_size=imgsz,
                         device=device,
@@ -508,15 +549,69 @@ def initialize_digit_model(args,logger=None):
                         ind_threshold=args.ind_thresh,
                         seq_threshold=args.seq_thresh,
                         output_threshold=args.out_thresh,
-                        # TODO: Make this a command line argument with path to file containing the valid combinations. (CSV or JSON)
-                        list_of_combinations=["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1505","1506",
-                                            "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
-                                            "1611","1612","1613","1614","1615","1616","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"], # TODO: Add the list of combinations to be tracked as read from a file.
+                        # TODO: Make this a command line argument with path to file containing the valid combinations. (CSV or JSON) This might be redundant if we have a good enough model, further testing is required!
+                        list_of_combinations=args.combination_file if args.combination_file is not None else LIST_OF_COMB, # TODO: Add the list of combinations to be tracked as read from a file.
                         visualize=args.visualize,
                         wait=args.wait,)
     return dd
+class ProgBar(tqdm):
+    def __init__(self, is_live:bool=False,duration:Union[float,int]=-1,*args, **kwargs):
+        super().__init__(*args, **kwargs,total=duration)
+        self.is_live = is_live
+        self.duration = duration
+        self.prev_time = time.monotonic()
+        self.start_time = time.monotonic()
+        self._select_format()
+    def _select_format(self):
+        if self.is_live:
+            if self.duration > 0:
+                self.bar_format = '{desc}{percentage:3.0f}%|{bar:20}|'
+            else:
+                # Indefinite time -> No ETA
+                self.bar_format = '{desc}'
+        else:
+            self.bar_format = '{desc}{percentage:3.0f}%|{bar:40}|{n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
+    def step(self, *args, **kwargs):
+        current_time = time.monotonic()
+        fps = self.get_fps(current_time=current_time)
+        mini_elapse = float(current_time - self.prev_time)
+        elapsed = current_time - self.start_time
+        if self.is_live:
+            self.update(mini_elapse) # Inherited from tqdm
+            # Remaining time is not available for live streams.
+            if self.duration > 0:
+                desc = str(f"Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed))} < {time.strftime('%H:%M:%S', time.gmtime(self.duration-elapsed))}| FPS: {fps:.1f}|")
+            else:
+                desc =  str(f"Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed))}| FPS: {fps:.1f}|")
+        else:
+            self.update(1)
+            desc = str(f"FPS: {fps:.1f}|")
+        self.prev_time = current_time
+        self.set_description(desc)
+        self.refresh()
 
-
+    def get_fps(self,current_time):
+        fps = 1/(current_time - self.prev_time+EPS)
+        return fps
+def test_progbar():
+    _time = 10
+    pb = ProgBar(is_live=False,duration=_time)
+    diff1s = []
+    for i in range(10):
+        start1 = time.monotonic()
+        pb.step()
+        end1 = time.monotonic()
+        # pb2.step()
+        diff1 = end1 - start1
+        diff1s.append(diff1)
+        time.sleep(0.00001)
+    pb.n = pb.total
+    pb.close()
+    print("\n",np.mean(diff1s))
+# if __name__=="__main__":
+#     test_progbar()
+def initialize_pbar(duration,live)->ProgBar:
+    pbar = ProgBar()
 def norm_preds(pred,im0s):
     """
     Normalize predictions to image size.

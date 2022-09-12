@@ -1,10 +1,11 @@
+import os
 import torch
 import numpy as np
 import logging
 from typing import Union,Tuple
 from colorama import Fore, Style
 from boliden_utils import torch,np,nn,time
-from boliden_utils import non_max_suppression, letterbox, visualize_yolo_2D,numpy_to_tuple
+from boliden_utils import non_max_suppression, letterbox, visualize_yolo_2D,numpy_to_tuple, ROOT
 
 class DigitPrediction:
     """
@@ -265,15 +266,28 @@ class DigitPredictionTracker:
         list_of_combinations = []
         if self.verbose:
             self.logger.info("Getting list of combinations...")
-        for comb in _list_of_combinations:
-            assert isinstance(comb,int) or isinstance(comb,str) and comb.isnumeric(),f"list_of_combinations must be a list of integers or strings of integers. Got {comb} of type {type(comb)}"
-            if isinstance(comb,str):
-                comb = comb.strip('-./ ')
-            if comb not in list_of_combinations:
-                list_of_combinations.append(str(comb))
-            else:
-                if self.verbose:
-                    self.logger.warning(f"Combination {comb} already in list_of_combinations. Skipping...")
+        if isinstance(_list_of_combinations,str):
+            path = _list_of_combinations
+            assert os.path.isfile(path), f"File {path} does not exist."
+            try:
+                with open(path, "r") as f:
+                    combinations = f.readlines()
+                    combinations = [x.strip().replace(" ",",").split(",") for x in combinations]
+                    combinations = [y.strip("\"") for x in combinations for y in x if len(y) > 0 and y.strip("\"").isnumeric()]
+            except:
+                raise Exception(f"Could not read file {_list_of_combinations}.")
+            list_of_combinations = combinations   
+        elif isinstance(_list_of_combinations,list):
+            for comb in _list_of_combinations:
+                assert isinstance(comb,int) or isinstance(comb,str) and comb.isnumeric(),f"list_of_combinations must be a list of integers or strings of integers. Got {comb} of type {type(comb)}"
+                if isinstance(comb,str):
+                    comb = comb.strip('-./ ')
+                if comb not in list_of_combinations:
+                    list_of_combinations.append(str(comb))
+                else:
+                    if self.verbose:
+                        self.logger.warning(f"Combination {comb} already in list_of_combinations. Skipping...")
+
         list_of_combinations.sort()
         if self.verbose:
             self.logger.info(f"List of combinations: {list_of_combinations}")
@@ -520,7 +534,7 @@ class DigitDetector:
         predictions = [pred.detach().cpu().numpy() for pred in predictions]
         sequence, valid = self.tracker.update(predictions,img)
         if self.visualize:
-            visualize_yolo_2D(img0=img0,pred=predictions,names=self.classes,rescale=True,img=img,wait=self.wait,image_name="Digit Detector")
+            visualize_yolo_2D(img0=img0,pred=predictions,names=self.classes,rescale=True,img=img,image_name="Digit Detector")
         if self.verbose:
             self.logger.info(f"Sequence: {sequence} from {f'{Fore.GREEN}valid{Style.RESET_ALL}' if valid else f'{Fore.RED}invalid{Style.RESET_ALL}'} sequence.")
         return sequence, valid

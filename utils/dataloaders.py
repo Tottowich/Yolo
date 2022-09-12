@@ -191,7 +191,7 @@ class LoadImages:
             assert isinstance(path, list), 'ERROR: path must be a string or list'
             assert isinstance(path[0], str), 'ERROR: path in list must be a string'
             files = path
-
+        self.is_live = False
         images = [x for x in files if x.split('.')[-1].lower() in IMG_FORMATS]
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
@@ -361,6 +361,7 @@ class LoadStreams:
     # YOLOv5 streamloader, i.e. `python detect.py --source 'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP streams`
     def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True,to_gray=False):
         self.mode = 'stream'
+        self.is_live= True
         self.img_size = img_size
         self.stride = stride
         self.to_gray = to_gray

@@ -57,13 +57,14 @@ def parse_config():
     parser.add_argument("--verbose",action="store_true",help="Whether to print information")
     parser.add_argument('--data_digit', type=str, default='./TrainedModels/digit/data.yaml', help='(optional) dataset.yaml path to digit dataset.')
     parser.add_argument('--imgsz_digit', nargs='+', type=int, default=448, help='inference size h,w')
+    parser.add_argument('--combination_file', type=str, default='./TrainedModels/data/combinations.txt', help='(optional) combination.txt path text file with currently valid digit combinations.')
     parser.add_argument('--time', type=int, default=-1
     , help='specify the time to stream data from a sensor')
     if sys.version_info >= (3,9):
         parser.add_argument('--augment', action='store_true', help='augmented inference')
         parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
         parser.add_argument('--visualize', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--wait', action=argparse.BooleanOptionalAction,help="Wait for keypress after each visualizationqqqqqqqqqqqqq")
+        parser.add_argument('--wait', action=argparse.BooleanOptionalAction,help="Wait for keypress after each visualization")
         parser.add_argument('--prog_bar', action=argparse.BooleanOptionalAction)
         parser.add_argument('--save_time_log', action=argparse.BooleanOptionalAction)
         parser.add_argument('--force_detect_digits', action=argparse.BooleanOptionalAction)
