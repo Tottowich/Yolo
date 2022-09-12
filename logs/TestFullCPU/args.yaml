@@ -30,7 +30,7 @@ line_thickness: 3
 log_all: null
 log_time: true
 max_det: 10
-name_run: TestFullPipe
+name_run: TestFullCPU
 object_frames: 3
 out_thresh: 0.35
 pcd_vis: null
@@ -51,4 +51,4 @@ wait: null
 webcam: null
 weights:
 - .\runs\train\FirstSchenkDetection\weights\best.onnx
-weights_digits: .\runs\train\DigitDetection_w_outliers\weights\best.pt
+weights_digits: .\runs\train\DigitDetection_w_outliers\weights\best.onnx

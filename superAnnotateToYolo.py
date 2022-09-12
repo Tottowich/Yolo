@@ -34,7 +34,7 @@ def get_args():
     parser.add_argument('--exists_ok', action='store_true', help='If set, will not create new output folder but add to existing')
     args = parser.parse_args()
     assert len(args.train_val_test) == 3, 'Train, val, test split must be provided'
-    assert sum(args.train_val_test) == 1, 'Train, val, test split must sum to 1'
+    assert round(sum(args.train_val_test),3) == 1.0, 'Train, val, test split must sum to 1'
     assert len(args.img_size) in [2,1], 'Image size must be provided'
     args.img_size = [args.img_size[0], args.img_size[0]] if len(args.img_size) == 1 else args.img_size
     return args

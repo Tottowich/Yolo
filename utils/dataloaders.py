@@ -175,16 +175,22 @@ class _RepeatSampler:
 
 class LoadImages:
     # YOLOv5 image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
-    def __init__(self, path, img_size=640, stride=32, auto=True):
-        p = str(Path(path).resolve())  # os-agnostic absolute path
-        if '*' in p:
-            files = sorted(glob.glob(p, recursive=True))  # glob
-        elif os.path.isdir(p):
-            files = sorted(glob.glob(os.path.join(p, '*.*')))  # dir
-        elif os.path.isfile(p):
-            files = [p]  # files
+    def __init__(self, path, img_size=640, stride=32, auto=True,reverse=False):
+        if not isinstance(path, list):
+            print(path)
+            p = str(Path(path).resolve())  # os-agnostic absolute path
+            if '*' in p:
+                files = sorted(glob.glob(p, recursive=True))  # glob
+            elif os.path.isdir(p):
+                files = sorted(glob.glob(os.path.join(p, '*.*')),reverse=reverse)  # dir
+            elif os.path.isfile(p):
+                files = [p]  # files
+            else:
+                raise Exception(f'ERROR: {p} does not exist')
         else:
-            raise Exception(f'ERROR: {p} does not exist')
+            assert isinstance(path, list), 'ERROR: path must be a string or list'
+            assert isinstance(path[0], str), 'ERROR: path in list must be a string'
+            files = path
 
         images = [x for x in files if x.split('.')[-1].lower() in IMG_FORMATS]
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
@@ -210,7 +216,9 @@ class LoadImages:
         return self
 
     def __next__(self):
-        if self.count == self.nf:
+        if not hasattr(self,"count"):
+            self.count = self.start
+        if self.count >= self.nf:
             raise StopIteration
         path = self.files[self.count]
 
@@ -245,7 +253,11 @@ class LoadImages:
         img = np.ascontiguousarray(img)
 
         return path, img, img0, self.cap, s
-
+    def set_start(self,start):
+        if start < self.nf:
+            self.start = start
+        else:
+            raise Exception(f'ERROR: setting start to {start} is out of range, max is {self.nf}')
     def new_video(self, path):
         self.frame = 0
         self.cap = cv2.VideoCapture(path)
@@ -253,13 +265,56 @@ class LoadImages:
 
     def __len__(self):
         return self.nf  # number of files
+    def __getitem__(self, index):
+        """
+        Allow Slicing and retrieve a single image
+        """
+        if not hasattr(self,"count"):
+            self.count = self.start
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            return [(self[i]) for i in range(start, stop, step)]
+        if index >= self.nf:
+            raise IndexError(f"Index {index} out of range for length {self.nf}")
+        path = self.files[self.count]
+
+        if self.video_flag[self.count]:
+            # Read video
+            self.mode = 'video'
+            ret_val, img0 = self.cap.read()
+            while not ret_val:
+                self.cap.release()
+                if self.count == self.nf:  # last video
+                    raise StopIteration
+                path = self.files[self.count]
+                self.new_video(path)
+                ret_val, img0 = self.cap.read()
+
+            self.frame += 1
+            s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames}) {path}: '
+
+        else:
+            # Read image
+            img0 = cv2.imread(path)  # BGR
+            assert img0 is not None, f'Image Not Found {path}'
+            s = f'image {self.count}/{self.nf} {path}: '
+
+        # Padded resize
+        img = letterbox(img0, self.img_size, stride=self.stride, auto=self.auto)[0]
+
+        # Convert
+        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        img = np.ascontiguousarray(img)
+
+        return path, img, img0, self.cap, s
 
 
 class LoadWebcam:  # for inference
     # YOLOv5 local webcam dataloader, i.e. `python detect.py --source 0`
-    def __init__(self, pipe='0', img_size=640, stride=32):
+    def __init__(self, pipe='0', img_size=640, stride=32,to_gray=False):
         self.img_size = img_size
         self.stride = stride
+        self.to_gray = to_gray
         self.pipe = eval(pipe) if pipe.isnumeric() else pipe
         self.cap = cv2.VideoCapture(self.pipe)  # video capture object
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)  # set buffer size
@@ -283,11 +338,16 @@ class LoadWebcam:  # for inference
         assert ret_val, f'Camera Error {self.pipe}'
         img_path = 'webcam.jpg'
         s = f'webcam {self.count}: '
-
+        if self.to_gray:
+            img0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
+            img0 = cv2.cvtColor(img0, cv2.COLOR_GRAY2BGR)
+        # img = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
+        # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         # Padded resize)
         img = letterbox(img0, self.img_size, stride=self.stride)[0]
 
         # Convert
+        
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
         print("image shape", img.shape)
@@ -299,11 +359,11 @@ class LoadWebcam:  # for inference
 
 class LoadStreams:
     # YOLOv5 streamloader, i.e. `python detect.py --source 'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP streams`
-    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True):
+    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True,to_gray=False):
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
-
+        self.to_gray = to_gray
         if os.path.isfile(sources):
             with open(sources) as f:
                 sources = [x.strip() for x in f.read().strip().splitlines() if len(x.strip())]
@@ -373,6 +433,9 @@ class LoadStreams:
         img0 = self.imgs.copy()
         img = [letterbox(x, self.img_size, stride=self.stride, auto=self.rect and self.auto)[0] for x in img0]
         # Stack
+        if self.to_gray:
+            img = [cv2.cvtColor(x, cv2.COLOR_BGR2GRAY) for x in img]
+            img = [cv2.cvtColor(x, cv2.COLOR_GRAY2BGR) for x in img]
         img = np.stack(img, 0)
 
         # Convert

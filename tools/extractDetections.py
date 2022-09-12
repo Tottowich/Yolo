@@ -78,7 +78,7 @@ class VerifyPredictions:
         data: LoadImages.
         output_folder: Path where output should be stored.
     """
-    def __init__(self, model, data, output_folder,count_auto_annotated=0,count_manual_annotated=0):
+    def __init__(self, model, data, output_folder,count_auto_annotated=0,count_manual_annotated=0,skipped=0):
         self.model = model
         self.names = self.model.names
         self.stride = self.model.stride
@@ -86,10 +86,11 @@ class VerifyPredictions:
         self.output_folder = output_folder
         self.count_auto_annotated = count_auto_annotated
         self.count_manual_annotated = count_manual_annotated
-        self.start = self.count_auto_annotated + self.count_manual_annotated
+        self.skipped = skipped
+        self.start = self.count_auto_annotated + self.count_manual_annotated + self.skipped
         self.data.start = self.start
-        self.auto_name = "autoV2"
-        self.manual_name = "manual"
+        self.auto_name = "autoSchenk"
+        self.manual_name = "manualSchenk"
         self.valid_list = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1506",
                             "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
                             "1611","1612","1613","1614","1615","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"]
@@ -151,7 +152,7 @@ class VerifyPredictions:
         pbar.update(self.start)
         for path, img, im0s, vid_cap,_ in self.data:
             pbar.update(1)
-            print(im0s.shape)
+            # print(im0s.shape)
             img = to_gray(img.transpose(1,2,0))
             img = increase_contrast(img)
             img = img.transpose(2,0,1)
@@ -166,19 +167,20 @@ class VerifyPredictions:
             winname = "Whole Image"
             cv2.namedWindow(winname)        # Create a named window
             cv2.moveWindow(winname, 40,30)
-            cv2.imshow(winname,im0s)
+            cv2.imshow(winname,cv2.resize(im0s,(640,im0s.shape[0]*640//im0s.shape[1])))
             class_string = visualize_yolo_2D(pred,img0=im0s,img=img,names=self.names,wait=False)
             random_show = random.random() < 0.1
-            save = self.get_input() if class_string in self.valid_list or random_show else self.skip_or_false(false_prob=0.2)
+            save = self.get_input() #if class_string in self.valid_list or random_show else self.skip_or_false(false_prob=0.2)
             # if class_string not in ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1506",
             #                                 "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
             #                                 "1611","1612","1613","1614","1615","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"]:
             #     print("Invalid class, skipping image...")
             #     save = False
             if save == "quit":
-                print("Stopped @ Auto Annotated: {} Manual Annotated: {}".format(self.count_auto_annotated,self.count_manual_annotated))
+                print("Stopped @ Auto Annotated: {}. Manual Annotated: {}. Skipped {}".format(self.count_auto_annotated,self.count_manual_annotated,self.skipped))
                 exit()
             elif save =="skip":
+                self.skipped += 1
                 # print(norm_preds(pred,im0s))
                 continue
             # print(f"Saving image: {save}")
@@ -316,17 +318,18 @@ class DataSplitter:
 with torch.no_grad():
     if __name__=="__main__":
         model,imgsz,names = initialize_yolo_model(parse_config()[0])
-        #data_ext = DataExtractor(None, 1, ["../datasets/Examples/Sequences/","../datasets/SuperAnnotate/SchenkGood"],"../datasets/Examples/Sequence_images/")
+        data_ext = DataExtractor(None, 1, ["../datasets/Examples/Sequences/","../datasets/SuperAnnotate/SchenkGood"],"../datasets/Examples/Sequence_images_schenk/")
         #print(data_ext.images_to_extract)
         # # #data_ext.extract()
-        # data = LoadImages("../datasets/Examples/Sequence_images/",auto=False,img_size=imgsz,stride=model.stride)
-        
-        # verify = VerifyPredictions(model,data,"../datasets/Examples/Sequence_verify/",count_auto_annotated=288,count_manual_annotated=211) # 247 141
-        # verify.verify()
-        data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/","../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
-        data_splitter.create_folders()
-        data_splitter.get_paths()
-        data_splitter.split_data()
+        print(len(data_ext.image_paths))
+        data = LoadImages(data_ext.image_paths,auto=False,img_size=imgsz,stride=model.stride)
+        print(len(data))
+        verify = VerifyPredictions(model,data,"../datasets/Examples/Sequence_verify_schenk/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
+        verify.verify()
+        # data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/","../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
+        # data_splitter.create_folders()
+        # data_splitter.get_paths()
+        # data_splitter.split_data()
         # # count = 0
         
         # for path, img, im0s, _,_ in tqdm(data):

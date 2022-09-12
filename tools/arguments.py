@@ -5,7 +5,7 @@ import sys
 from  pathlib import Path
 import os
 FILE = Path(__file__).resolve()
-ROOT = FILE.parents[0]
+ROOT = FILE.parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT)) # Add ROOT
 ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
@@ -17,7 +17,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     #parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
     #                    help='specify the config for demo')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './runs/train/FirstSchenkDetection/weights/best.onnx', help='model path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/object/best.onnx', help='model path(s)')
 
     parser.add_argument('--source', type=str, default=None, help='model path(s)')
 
@@ -25,10 +25,10 @@ def parse_config():
     parser.add_argument('--port', type=int, default=None, help='port')
 
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=448, help='inference size h,w')
-    parser.add_argument('--data', type=str, default=ROOT / "./datasets/YoloFormat/FirstBolidenYolo3/data.yaml", help='(optional) dataset.yaml path')
+    parser.add_argument('--data', type=str, default=ROOT / "./TrainedModels/Object/data.yaml", help='(optional) dataset.yaml path')
     parser.add_argument('--max_det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--conf_thres', type=float, default=0.25, help='confidence threshold')
-    parser.add_argument('--iou_thres', type=float, default=0.45, help='NMS IoU threshold')
+    parser.add_argument('--conf_thres', type=float, default=0.6, help='confidence threshold')
+    parser.add_argument('--iou_thres', type=float, default=0.1, help='NMS IoU threshold')
     parser.add_argument('--line_thickness', default=3, type=int, help='bounding box thickness (pixels) visualizations')
     parser.add_argument('--hide_labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide_conf', default=False, action='store_true', help='hide confidences')
@@ -42,22 +42,22 @@ def parse_config():
     parser.add_argument('--name_run', type=str, default=f"{RANDOM_NAME.get_random_word()}_{RANDOM_NAME.get_random_word()}", help='specify the name of the run to save the results')
 
     # Object Tracking
-    parser.add_argument('--object_frames', type=int, default=6, help='Take the last n frames to track the certainty of the prediction.')
-    parser.add_argument('--tracker_thresh', type=float, default=0.2, help='Tracker threshold')
+    parser.add_argument('--object_frames', type=int, default=3, help='Take the last n frames to track the certainty of the prediction.')
+    parser.add_argument('--tracker_thresh', type=float, default=0.6, help='Tracker threshold')
     parser.add_argument('--class_to_track', type=int, default=1, help='Class index to track')
     # Digit Tracking:
     parser.add_argument('--track_digits', action='store_true', help='Track the digits')
-    parser.add_argument('--digit_frames', type=int, default=6, help='Take the last n frames to track the certainty of the prediction.')
-    parser.add_argument("--weights_digits",type=str,default="./runs/train/GRAAAYBabyDolphine/weights/best.onnx",help="Path to model for digit detection")
-    parser.add_argument("--conf_digits",type=float,default=0.1,help="Confidence threshold for digit detection")
+    parser.add_argument('--digit_frames', type=int, default=3, help='Take the last n frames to track the certainty of the prediction.')
+    parser.add_argument("--weights_digits",type=str,default="./TrainedModels/digit/best.onnx",help="Path to model for digit detection")
+    parser.add_argument("--conf_digits",type=float,default=0.3,help="Confidence threshold for digit detection")
     parser.add_argument("--iou_digits",type=float,default=0.1,help="NMS IoU threshold for digit detections")
-    parser.add_argument("--ind_thresh",type=float,default=0.5,help="Individual threshold if a score of an individual digit is below this threshold then the sequence is invalid")
-    parser.add_argument("--seq_thresh",type=float,default=0.5,help="Sequence threshold if the average score of the sequence is below this threshold then the sequence is invalid")
-    parser.add_argument("--out_thresh",type=float,default=0.5,help="Output threshold if the average score of the sequence of sequences is below this threshold then the sequence history is invalid")
+    parser.add_argument("--ind_thresh",type=float,default=0.1,help="Individual threshold if a score of an individual digit is below this threshold then the sequence is invalid")
+    parser.add_argument("--seq_thresh",type=float,default=0.2,help="Sequence threshold if the average score of the sequence is below this threshold then the sequence is invalid")
+    parser.add_argument("--out_thresh",type=float,default=0.35,help="Output threshold if the average score of the sequence of sequences is below this threshold then the sequence history is invalid")
     parser.add_argument("--verbose",action="store_true",help="Whether to print information")
-    parser.add_argument('--data_digit', type=str, default='./data/svhn.yaml', help='(optional) dataset.yaml path to digit dataset.')
+    parser.add_argument('--data_digit', type=str, default='./TrainedModels/digit/data.yaml', help='(optional) dataset.yaml path to digit dataset.')
     parser.add_argument('--imgsz_digit', nargs='+', type=int, default=448, help='inference size h,w')
-    parser.add_argument('--time', type=int, default=100
+    parser.add_argument('--time', type=int, default=-1
     , help='specify the time to stream data from a sensor')
     if sys.version_info >= (3,9):
         parser.add_argument('--augment', action='store_true', help='augmented inference')
@@ -66,19 +66,20 @@ def parse_config():
         parser.add_argument('--wait', action=argparse.BooleanOptionalAction,help="Wait for keypress after each visualizationqqqqqqqqqqqqq")
         parser.add_argument('--prog_bar', action=argparse.BooleanOptionalAction)
         parser.add_argument('--save_time_log', action=argparse.BooleanOptionalAction)
+        parser.add_argument('--force_detect_digits', action=argparse.BooleanOptionalAction)
         parser.add_argument('--track', action=argparse.BooleanOptionalAction)
         parser.add_argument('--save_csv', action=argparse.BooleanOptionalAction)
         parser.add_argument('--log_time', action=argparse.BooleanOptionalAction)
         parser.add_argument('--disp_pred', action=argparse.BooleanOptionalAction)
         parser.add_argument('--disp_time', action=argparse.BooleanOptionalAction)
         parser.add_argument('--transmit', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--pcd_vis', action=argparse.BooleanOptionalAction)
         parser.add_argument('--webcam', action=argparse.BooleanOptionalAction)
         parser.add_argument('--log_all', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--cpu_post', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     if isinstance(args.imgsz, list) and len(args.imgsz) == 1:
         args.imgsz = args.imgsz[0]
+    if isinstance(args.imgsz,int):
+        args.imgsz = (args.imgsz, args.imgsz)
     with open(args.data,'r') as f:
         try:
             data_config = yaml.safe_load(f)

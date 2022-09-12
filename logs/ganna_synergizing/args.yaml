@@ -6,7 +6,7 @@ ckpt: null
 class_to_track: 1
 classes: null
 conf_digits: 0.3
-conf_thres: 0.6
+conf_thres: 0.5
 cpu_post: null
 data: .\datasets\YoloFormat\FirstBolidenYolo3\data.yaml
 data_digit: ./data/svhn.yaml
@@ -15,7 +15,7 @@ digit_frames: 3
 disp_pred: false
 disp_time: null
 dnn: false
-force_detect_digits: false
+force_detect_digits: null
 half: false
 hide_conf: false
 hide_labels: false
@@ -30,7 +30,7 @@ line_thickness: 3
 log_all: null
 log_time: true
 max_det: 10
-name_run: TestFullPipe
+name_run: ganna_synergizing
 object_frames: 3
 out_thresh: 0.35
 pcd_vis: null
@@ -39,11 +39,11 @@ prog_bar: true
 save_csv: null
 save_time_log: true
 seq_thresh: 0.2
-source: .\datasets\Examples\Sequence_images\
+source: .\datasets\Examples\Sequences\2022-07-02-075218
 time: -1
 track: true
 track_digits: true
-tracker_thresh: 0.7
+tracker_thresh: 0.5
 transmit: null
 verbose: false
 visualize: false
@@ -51,4 +51,4 @@ wait: null
 webcam: null
 weights:
 - .\runs\train\FirstSchenkDetection\weights\best.onnx
-weights_digits: .\runs\train\DigitDetection_w_outliers\weights\best.pt
+weights_digits: .\runs\train\SVHNval_BolidenDigit6\weights\best.pt
