@@ -158,7 +158,7 @@ def main(args: argparse.Namespace=None) -> None:
                 pbar.n = pbar.total
                 pbar.refresh()
             break
-        if not args.webcam:
+        if args.wait:
             wait_for_input(live=live,args=args)
 
 
