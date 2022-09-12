@@ -17,7 +17,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     #parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
     #                    help='specify the config for demo')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/object/best.onnx', help='model path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/object/object.onnx', help='model path(s)')
 
     parser.add_argument('--source', type=str, default=None, help='model path(s)')
 
@@ -48,7 +48,7 @@ def parse_config():
     # Digit Tracking:
     parser.add_argument('--track_digits', action='store_true', help='Track the digits')
     parser.add_argument('--digit_frames', type=int, default=3, help='Take the last n frames to track the certainty of the prediction.')
-    parser.add_argument("--weights_digits",type=str,default="./TrainedModels/digit/best.onnx",help="Path to model for digit detection")
+    parser.add_argument("--weights_digits",type=str,default="./TrainedModels/digit/digit.onnx",help="Path to model for digit detection")
     parser.add_argument("--conf_digits",type=float,default=0.3,help="Confidence threshold for digit detection")
     parser.add_argument("--iou_digits",type=float,default=0.1,help="NMS IoU threshold for digit detections")
     parser.add_argument("--ind_thresh",type=float,default=0.1,help="Individual threshold if a score of an individual digit is below this threshold then the sequence is invalid")
