@@ -509,15 +509,13 @@ def initialize_timer(time_logger:TimeLogger,args,transmitter=None):
     
     time_logger.create_metric("Pre Processing")
     time_logger.create_metric("Infrence")
-    if args.cpu_post:
-        time_logger.create_metric("Reloading CPU")
     time_logger.create_metric("Post Processing")
+    if args.track:
+        time_logger.create_metric("Tracking Frames")
     if args.visualize:
         time_logger.create_metric("Visualize")
     if args.save_csv:
         time_logger.create_metric("Save CSV")
-    if args.track:
-        time_logger.create_metric("Tracking Frames")
     time_logger.create_metric("Internal Pipeline")
     time_logger.create_metric("Full Pipeline")
 
