@@ -448,11 +448,14 @@ def initialize_network(args):
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
     model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=half)
+    memory_usage(model)
     model.eval()
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
     imgsz = check_img_size(imgsz=imgsz, s=stride)
+    example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
+    flop_counter(model, example_img)
     # Create file to save logs to.
     if args.save_time_log:
         dir_path = create_logging_dir(args.name_run,ROOT / "logs",args)
@@ -529,12 +532,18 @@ def initialize_digit_model(args,logger=None):
     """
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
+    print(f"PRE CREATION")
     model = DetectMultiBackend(args.weights_digits, device=device, dnn=False, data=args.data_digit, fp16=half)
+    print(f"POST CREATION")
+    memory_usage(model)
     model.eval()
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
     imgsz = check_img_size(imgsz=imgsz, s=stride)
+    example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
+    flop_counter(model, example_img)
+    
     from DigitDetector import DigitDetector # Import here to avoid circular import.
     dd = DigitDetector(model=model,
                         img_size=imgsz,
@@ -623,8 +632,24 @@ def norm_preds(pred,im0s):
             xyxy[:, 3] /= im0s.shape[0]
             pred[i][:,:4] = xyxy
     return pred
+def flop_counter(model,x,**kwargs):
+    from thop import profile, clever_format
+    # if kwargs.get("context",None) is None:
+    #     flops, params = profile(model, inputs=(x,),verbose=False)
+    # else:
+    #     flops, params = profile(model, inputs=(x,kwargs.get("context",None)),verbose=False)
+    if not isinstance(x,tuple):
+        flops, params = profile(model, inputs=(x,),verbose=False)
+    else:
+        x,*context = x
+        flops, params = profile(model, inputs=(x,*context),verbose=False)
+    print(f"{model.__class__.__name__} has {flops/1e9:.2f} GFLOPS and {params/1e6:.2f} MParams")
 
-
+def memory_usage(model):
+    mem_params = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    mem = mem_params + mem_bufs # in bytes
+    print(f"{model.__class__.__name__} has {mem/1e6:.2f} MBytes of memory")
 """ TESTING """
 # def arguments():
 #     parser = argparse.ArgumentParser(description="Digit Detection")
