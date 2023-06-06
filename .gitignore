@@ -59,6 +59,8 @@ VOC/
 *.pt
 *.pb
 *.onnx
+!TrainedModels/Object/object.onnx
+!TrainedModels/Digit/digit.onnx
 *.engine
 *.mlmodel
 *.torchscript
