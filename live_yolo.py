@@ -1,40 +1,27 @@
-# import glob
-import time
-# import math
-# import yaml
-import torch
-import os, sys
-# os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-# PYTORCH_ENABLE_MPS_FALLBACK=1
 import argparse
-# import threading
-from re import S
-import numpy as np
-from copy import copy
-from tqdm import tqdm
-from queue import Queue
+import os
+import sys
+import time
 from pathlib import Path
+
+import torch
 from colorama import Fore, Style
-from tools.arguments import parse_config
 from random_word import RandomWords
+
+from tools.arguments import parse_config
+
 RANDOM_NAME = RandomWords()
-# import matplotlib.pyplot as plt 
-# from concurrent.futures import ThreadPoolExecutor
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT)) # Add ROOT
 ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
-# from contextlib import closing
 import torch.backends.cudnn as cudnn
-# from utils.dataloaders import LoadStreams, LoadWebcam, LoadImages
-# from models.common import DetectMultiBackend
-from tools.boliden_utils import (disp_pred, visualize_yolo_2D,scale_preds,initialize_digit_model,initialize_network,initialize_timer, wait_for_input,ProgBar)
 
+from tools.boliden_utils import (ProgBar, disp_pred, initialize_digit_model, initialize_network, initialize_timer,
+                                 scale_preds, visualize_yolo_2D, wait_for_input)
 from utils.general import non_max_suppression
-                        #     ,(LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
-                        #    increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-# from utils.torch_utils import select_device, time_sync
+
 EPS = 1e-8
 
 @torch.no_grad() # No grad to save memory
@@ -58,16 +45,6 @@ def main(args: argparse.Namespace=None) -> None:
 
     if args.prog_bar:
         pbar = ProgBar(live.is_live,args.time)
-        # if args.time > 0:
-        #     t1 = time.monotonic() # Time to keep track of FPS count when using progress bar 
-        #     pbar = tqdm(total=args.time,bar_format = "{desc}: {percentage:.3f}%|{bar:30}|[{elapsed}<{remaining}]",leave=True)
-        # else:
-        #     pbar = tqdm(total=len(live),bar_format = "{desc}: [{elapsed}<{remaining}]",leave=True)
-        
-    
-    # multidirs = os.listdir("./datasets/Examples/Sequences/")
-    # lives = [LoadImages(path=os.path.join("./datasets/Examples/Sequences",dire), img_size=448, stride=32, auto=False) for dire in multidirs]
-        # print(f"Starting new sequence: ")
     for i,(path, img, img0, vid_cap, s) in enumerate(live):
         img0 = img0[0] if args.webcam else img0
         if log_time:
@@ -75,19 +52,8 @@ def main(args: argparse.Namespace=None) -> None:
         if args.prog_bar and not init:
             if args.webcam:
                 pbar.step()
-                # t2 = time.monotonic()
-                # pbar.update((t2 - t1))
-                # if args.time > 0:
-                #     pbar.bar_format = "{desc}: {percentage:.1f}%|{bar:10}|[{elapsed}<{remaining}]"
-                # else:
-                #     pbar.bar_format = "{desc}"
-                # pbar.set_description(str(f"Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(t2 - start_stream))}| FPS: {(1/(t2-t1+EPS)):.1f}|"))
-                # pbar.refresh()
-                # t1 = t2
             else:
                 pbar.step()
-                # pbar.update(1)
-                # pbar.refresh()
         if log_time:
             time_logger.start("Pre Processing")
         img = torch.from_numpy(img).to(device)
@@ -130,7 +96,7 @@ def main(args: argparse.Namespace=None) -> None:
         if args.visualize:
             if log_time:
                 time_logger.start("Visualize")
-            visualize_yolo_2D(pred,img0 = img0,img=img,args=args,names=names,line_thickness=3,classes_not_to_show=[0])     
+            visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names, line_thickness=3, classes_not_to_show=[0])     
             if log_time:
                 time_logger.stop("Visualize")
 
@@ -148,7 +114,7 @@ def main(args: argparse.Namespace=None) -> None:
                 if log_time:
                     time_logger.start("Tracking Digit")
                 # Digit Sequence Tracking.
-                sequence,valid = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
+                sequence, valid = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
                 if log_time:
                     time_logger.stop("Tracking Digit")
                 if valid:
@@ -180,49 +146,145 @@ def main(args: argparse.Namespace=None) -> None:
 """
 Example Input:
     py live_yolo.py --weights "yolov5n6.pt" --imgsz 1280  --iou_thres 0.2 --conf_thres 0.25 --log_time --time 2000 --no-prog_bar --save_time_log --max_det 10 --no-disp_pred --track --tracker_thresh 0.05 --frames_to_track 10 --visualize
-py live_yolo.py 
-            # Main Object Detection:
-            --data: str # Path to data file (.yaml). Should contain class names and number of classes. 
-            --weights: str # Path to Object Detection Model.
-            --imgsz: list[int,int] or int # Image size predictions are made in. Default: 448
-            --iou_thres: float[0->1] # IOU Threshold for NMS related to object detection. Default: 0.4
-            --conf_thres: float[0->1] # Confidence Threshold for object detection. Default: 0.5
-            --max_det: int # Maximum number of detections per frame to be made. Default: 1000
-            --track: store_true# Track best detection over time. Default: False
-            --class_to_track: int # Class to track. Default 1
-            --tracker_thresh: float[0->1] # Threshold the prediction must be above to be considered for tracking. Default: 0.5
-            --object_frames: int # Number of frames to track object for, i.e. the number of frames the object must be detected for to be considered valid. Default: 3
-            # Digit Detection:
-            --track_digits: store_true # Whether to track digits in bounding boxes of tracked objects. Default: False
-            --data_digit: str # Path to data file (.yaml). Should contain class names and number of classes.
-            --weights_digits: str # Path to Digit Detection Model.
-            --conf_digit 0.3 # Digit Prediction Confidence Threshold @ Predtiction stage
-            --iou_digit 0.3 # Digit Prediction IoU Threshold @ Predtiction stage
-            --ind_thresh: float[0->1] # Threshold for digit detection tracking. If one of the digits is bleow this threshold, the sequence is considered invalid. Default: 0.4
-            --seq_thresh: float[0->1] # Threshold for digit detection tracking. If the average sequence score is below this threshold, the sequence is considered invalid. Default: 0.5
-            --out_thresh: float[0->1] # Threshold for digit detection tracking. if the average score of the sequences in the history of previous sequences is below this threshold, the history is not valid else valid output. Default: 0.5
-            --digit_frames: int # Number of frames to track digits for, i.e. the number of frames the predicted digit sequence must be valid and consistent. Default: 3
-            
-            --force_detect_digits: store_true # Force digit detection on every frame. Default: False.
-            # Other:
-            --source: str # Path to directory image or video file. Default: None
-            --verbose: store_true # Extensive information to console. Default: False
-            --log_time: store_true # Log time taken for each step of the pipeline. Default: False
-            --prog_bar: store_true # Show progress bar for live stream. Default: False
-            --save_time_log: store_true # Save time log to file as csv under logs folder. Default: False
-            --disp_pred: store_true # Display predictions in terminal. Default: False
-            --visualize: store_true # Visualize predictions
-            --webcam: store_true # Use webcam as input
-            --device: str # Device to run on
-            --time: int # Time to run in seconds if -1 runs forever
-            --half: store_true # Half precision FP16 inference ONLY ON GPU
-            --line_thickness: int # Line thickness for visualization
-            --hide_labels: store_true # Hide labels in visualization
-            --hide_conf: store_true # Hide confidence in visualization
-            --name_run: str # Name of run for logging of time
+--weights (type: str, default: ROOT / './TrainedModels/object/object.onnx')
+Description: Path to the model weights file(s).
+Example: --weights ./path/to/weights.onnx
 
+--source (type: str, default: None)
+Description: Path to the input source.
+Example: --source ./path/to/input.mp4
+
+--ip (type: str, default: None)
+Description: IP address.
+Example: --ip 192.168.0.1
+
+--port (type: int, default: None)
+Description: Port number.
+Example: --port 8080
+
+--imgsz or --img or --img-size (type: int or list[int], default: 448)
+Description: Inference size (height and width) for the input image.
+Example: --imgsz 512 or --img-size 640 480
+
+--data (type: str, default: ROOT / "./TrainedModels/Object/data.yaml")
+Description: Path to the dataset configuration file.
+Example: --data ./path/to/data.yaml
+
+--max_det (type: int, default: 1000)
+Description: Maximum number of detections per image.
+Example: --max_det 500
+
+--conf_thres (type: float, default: 0.6)
+Description: Confidence threshold for object detection.
+Example: --conf_thres 0.5
+
+--iou_thres (type: float, default: 0.1)
+Description: Intersection over Union (IoU) threshold for non-maximum suppression (NMS).
+Example: --iou_thres 0.2
+
+--line_thickness (type: int, default: 3)
+Description: Thickness of bounding box lines for visualizations (in pixels).
+Example: --line_thickness 2
+
+--hide_labels (action: store_true, default: False)
+Description: Hide object labels in visualizations.
+Example: --hide_labels
+
+--hide_conf (action: store_true, default: False)
+Description: Hide object confidences in visualizations.
+Example: --hide_conf
+
+--half (action: store_true)
+Description: Use FP16 (half-precision) inference instead of FP32 (default).
+Example: --half
+
+--dnn (action: store_true)
+Description: Use OpenCV DNN for ONNX inference.
+Example: --dnn
+
+--device (type: str, default: 'cuda:0')
+Description: CUDA device to use for inference (e.g., 'cuda:0', 'cpu', 'mps').
+Example: --device cuda:0
+
+--ckpt (type: str, default: None)
+Description: Path to the pretrained model checkpoint.
+Example: --ckpt ./path/to/checkpoint.pth
+
+--auto (action: store_true)
+Description: Auto-size using the model.
+Example: --auto
+
+--classes (type: int or list[int])
+Description: Filter detections by class index.
+Example: --classes 0 or --classes 0 2 3
+
+--img_size (type: int or list[int])
+Description: Size of the input image.
+Example: --img_size 800 or --img_size 1024 768
+
+--name_run (type: str, default: randomly generated names)
+Description: Name of the run to save the results.
+Example: --name_run my_run
+
+--object_frames (type: int, default: 3)
+Description: Number of frames to track for object certainty.
+Example: --object_frames 5
+
+--tracker_thresh (type: float, default: 0.6)
+Description: Tracker threshold for object tracking.
+Example: --tracker_thresh 0.5
+
+--class_to_track (type: int, default: 1)
+Description: Class index to track.
+Example: --class_to_track 2
+
+--track_digits (action: store_true)
+Description: Enable digit tracking.
+Example: --track_digits
+
+--digit_frames (type: int, default: 3)
+Description: Number of frames to track for digit certainty.
+Example: --digit_frames 5
+
+--weights_digits (type: str, default: "./TrainedModels/digit/digit.onnx")
+Description: Path to the model for digit detection.
+Example: --weights_digits ./path/to/digit_model.onnx
+
+--conf_digits (type: float, default: 0.3)
+Description: Confidence threshold for digit detection.
+Example: --conf_digits 0.5
+
+--iou_digits (type: float, default: 0.1)
+Description: IoU threshold for digit detections.
+Example: --iou_digits 0.2
+
+--ind_thresh (type: float, default: 0.1)
+Description: Individual threshold for digit sequences.
+Example: --ind_thresh 0.2
+
+--seq_thresh (type: float, default: 0.2)
+Description: Sequence threshold for digit sequences.
+Example: --seq_thresh 0.3
+
+--out_thresh (type: float, default: 0.35)
+Description: Output threshold for sequence history.
+Example: --out_thresh 0.4
+
+--verbose (action: store_true)
+Description: Print information during execution.
+Example: --verbose
+
+--data_digit (type: str, default: "./TrainedModels/digit/data.yaml")
+Description: Path to the dataset configuration file for digit detection.
+Example: --data_digit ./path/to/digit_data.yaml
+
+--imgsz_digit (type: int or list[int], default: 448)
+Description: Inference size (height and width) for digit detection.
+Example: --imgsz_digit 512 or --imgsz_digit 640 480
+
+--combination_file (type: str, default: "./TrainedModels/data/combinations.txt")
+python live_yolo.py --iou_tresh
 """
-
 
 
 # Example Input:

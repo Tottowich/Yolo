@@ -17,7 +17,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     #parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
     #                    help='specify the config for demo')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/object/object.onnx', help='model path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/Object/object.onnx', help='model path(s) detect objects')
 
     parser.add_argument('--source', type=str, default=None, help='model path(s)')
 
@@ -27,7 +27,7 @@ def parse_config():
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=448, help='inference size h,w')
     parser.add_argument('--data', type=str, default=ROOT / "./TrainedModels/Object/data.yaml", help='(optional) dataset.yaml path')
     parser.add_argument('--max_det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--conf_thres', type=float, default=0.6, help='confidence threshold')
+    parser.add_argument('--conf_thres', type=float, default=0.2, help='confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.1, help='NMS IoU threshold')
     parser.add_argument('--line_thickness', default=3, type=int, help='bounding box thickness (pixels) visualizations')
     parser.add_argument('--hide_labels', default=False, action='store_true', help='hide labels')
@@ -38,7 +38,7 @@ def parse_config():
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
     parser.add_argument('--auto', action='store_true', help='auto size using the model')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
-    parser.add_argument('--img_size', nargs='+', type=int, help='Size of input image')
+    # parser.add_argument('--img_size', nargs='+', type=int, help='Size of input image')
     parser.add_argument('--name_run', type=str, default=f"{RANDOM_NAME.get_random_word()}_{RANDOM_NAME.get_random_word()}", help='specify the name of the run to save the results')
 
     # Object Tracking
@@ -48,14 +48,14 @@ def parse_config():
     # Digit Tracking:
     parser.add_argument('--track_digits', action='store_true', help='Track the digits')
     parser.add_argument('--digit_frames', type=int, default=3, help='Take the last n frames to track the certainty of the prediction.')
-    parser.add_argument("--weights_digits",type=str,default="./TrainedModels/digit/digit.onnx",help="Path to model for digit detection")
+    parser.add_argument("--weights_digits",type=str,default="./TrainedModels/Digit/digit.onnx",help="Path to model for digit detection")
     parser.add_argument("--conf_digits",type=float,default=0.3,help="Confidence threshold for digit detection")
     parser.add_argument("--iou_digits",type=float,default=0.1,help="NMS IoU threshold for digit detections")
     parser.add_argument("--ind_thresh",type=float,default=0.1,help="Individual threshold if a score of an individual digit is below this threshold then the sequence is invalid")
     parser.add_argument("--seq_thresh",type=float,default=0.2,help="Sequence threshold if the average score of the sequence is below this threshold then the sequence is invalid")
     parser.add_argument("--out_thresh",type=float,default=0.35,help="Output threshold if the average score of the sequence of sequences is below this threshold then the sequence history is invalid")
     parser.add_argument("--verbose",action="store_true",help="Whether to print information")
-    parser.add_argument('--data_digit', type=str, default='./TrainedModels/digit/data.yaml', help='(optional) dataset.yaml path to digit dataset.')
+    parser.add_argument('--data_digit', type=str, default='./TrainedModels/Digit/data.yaml', help='(optional) dataset.yaml path to digit dataset.')
     parser.add_argument('--imgsz_digit', nargs='+', type=int, default=448, help='inference size h,w')
     parser.add_argument('--combination_file', type=str, default='./TrainedModels/data/combinations.txt', help='(optional) combination.txt path text file with currently valid digit combinations.')
     parser.add_argument('--time', type=int, default=-1
@@ -87,4 +87,4 @@ def parse_config():
         except:
             raise ValueError(f"Invalid data config file: {args.data}")
 
-    return args,data_config
+    return args, data_config

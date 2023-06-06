@@ -61,7 +61,7 @@ def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
     """
     assert logger is not None, "Logger object is not passed"
     logger.info(f"{Fore.GREEN}Predictions:{Style.RESET_ALL}\n")
-    class_count = np.zeros((len(names),1), dtype=np.int)
+    class_count = np.zeros((len(names),1), dtype=np.int16)
     for i,det in enumerate(pred):
         if len(det):
             for j,(*xyxy, conf, cls) in enumerate(det):
@@ -437,6 +437,7 @@ def initialize_yolo_model(args):
     imgsz = check_img_size(imgsz=imgsz, s=stride)
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
     return model,imgsz,names
+
 def initialize_network(args):
     """
     Initialize the network.
@@ -458,12 +459,9 @@ def initialize_network(args):
     flop_counter(model, example_img)
     # Create file to save logs to.
     if args.save_time_log:
-        dir_path = create_logging_dir(args.name_run,ROOT / "logs",args)
+        dir_path = create_logging_dir(args.name_run, ROOT / "logs",args)
     else:
         dir_path = None
-    # Horror video = https://www.youtube.com/watch?v=mto2mNFbrps&ab_channel=TromaMovies
-    # source = args.source if args.source is not None else "0" if args.webcam else raise ValueError("No source specified.")
-    # Check if file
     source = args.source
     if source is not None and (os.path.isfile(source) or os.path.isdir(source)):
         live = LoadImages(path=source,img_size=imgsz,stride=stride,auto=args.auto,reverse=False)
