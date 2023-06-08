@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import torch
+import numpy as np
 from colorama import Fore, Style
 from random_word import RandomWords
 
@@ -20,9 +21,8 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd())) # Relative Path
 import torch.backends.cudnn as cudnn
 
 from tools.boliden_utils import (ProgBar, disp_pred, initialize_digit_model, initialize_network, initialize_timer,
-                                 scale_preds, wait_for_input, visualize_yolo_2D)
+                                 scale_preds, wait_for_input, visualize_yolo_2D, visualize_new)
 # from tools.visualization import visualize_yolo_2D
-from utils.general import non_max_suppression
 #PYTORCH_ENABLE_MPS_FALLBACK=1
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 EPS = 1e-8
@@ -39,22 +39,20 @@ def main(args: argparse.Namespace=None) -> None:
         dd = initialize_digit_model(args,logger=logger)
     else:
         dd = None
+    
     log_time = False # False to let the program run for one loop to warm up :)
-
-
     logger.info(f"Infrence run stored @ ./logs/{args.name_run}")
     logger.info(f"Streaming data to: Yolov5 using {args.weights}")
     start_stream = time.monotonic()
 
     if args.prog_bar:
-        pbar = ProgBar(live.is_live,args.time)
-    # if args.visualize:
-    #     gui = GUIWithImages(tiles=(1,2), titles=("Object", "Digit"))
-    #     gui.create_gui()
-    for i,(path, img, img0, vid_cap, s) in enumerate(live):
-        if not live.is_live and args.verbose:
-            logger.info(f"Image {i}/{live.is_live}: {path}")
+        pbar = ProgBar(live.is_live, args.time)
+    for i,(path, img0, img,_) in enumerate(live):
+        if not live.mode=="stream" and args.verbose:
+            logger.info(f"Image {i}/{len(live)}: {path}")
         img0 = img0[0] if args.webcam else img0
+        assert isinstance(img0, np.ndarray), f"img0 must be a np.ndarray, got {type(img0)}"
+        assert isinstance(img, torch.Tensor), f"img must be a torch.Tensor, got {type(img)}"
         if log_time:
             time_logger.start("Internal Pipeline")
         if args.prog_bar and not init:
@@ -64,26 +62,26 @@ def main(args: argparse.Namespace=None) -> None:
                 pbar.step()
         if log_time:
             time_logger.start("Pre Processing")
-        img = torch.from_numpy(img).to(device)
         img = img.half() if args.half else img.float()  # uint8 to fp16/32
-        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        # img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if init:
             t1 = time.monotonic()
             if args.verbose:
-                logger.info(f"Image size: {img.shape}")
+                # logger.info(f"Image size: {img.shape}")
                 logger.info(f"img0 size: {img0.shape}")
         if log_time:
             time_logger.stop("Pre Processing")
-        if len(img.shape) == 3:
-            img = img.unsqueeze(0)
+        # if len(img.shape) == 3:
+        #     img = img.unsqueeze(0)
         if i%2 == 0 and log_time:
             time_logger.start("Full Pipeline")
         if i%2 == 1 and log_time and i != 1:
             time_logger.stop("Full Pipeline")
-        
+
         if log_time:
             time_logger.start("Infrence")
-        pred = model(img,augment=args.augment) # Inference
+        results = model.predict(img, augment=args.augment,verbose=False)[0].cpu().numpy() # Inference
+        pred = results.boxes.data
         if log_time:
             time_logger.stop("Infrence")
         if device == torch.device("mps"): # Slow NMS on mps -> move to cpu when using mps (Apple Silicon)
@@ -94,9 +92,8 @@ def main(args: argparse.Namespace=None) -> None:
                 time_logger.stop("Reloading CPU")
         if log_time:
             time_logger.start("Post Processing")
-
-        pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, agnostic=False, max_det=args.max_det)
-        pred = scale_preds(preds=pred, img0=img0,img=img) # Returns list of Torch.Tensors. Each tensor is a prediction with shape: [x1,y1,x2,y2,conf,class]
+        # pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, agnostic=False, max_det=args.max_det)
+        # pred = scale_preds(preds=pred, img0=img0,img=img) # Returns list of Torch.Tensors. Each tensor is a prediction with shape: [x1,y1,x2,y2,conf,class]
         if log_time:
             time_logger.stop("Post Processing")
         if args.disp_pred:
@@ -104,7 +101,8 @@ def main(args: argparse.Namespace=None) -> None:
         if args.visualize:
             if log_time:
                 time_logger.start("Visualize")
-            visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names, line_thickness=3)#, classes_not_to_show=[0])     
+            visualize_new(pred=results, img0=img0, image_name="Schenk/Sign Predictions")
+            # visualize_yolo_2D(results, img0=img0, img=img, args=args, names=names, line_thickness=3)#, classes_not_to_show=[0])
             if log_time:
                 time_logger.stop("Visualize")
 
@@ -122,9 +120,9 @@ def main(args: argparse.Namespace=None) -> None:
                 if log_time:
                     time_logger.start("Tracking Digit")
                 # Digit Sequence Tracking.
-                sequence, valid, predictions, img0, img = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
+                sequence, valid, result_digit, boxes_digit = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
                 if args.visualize:
-                    visualize_yolo_2D(img0=img0,pred=predictions,names=dd.classes, rescale=True, img=img, image_name="Digit Detector")
+                    visualize_new(pred=result_digit,img0=best_frame["image"],image_name="Digit Detector")
                 if log_time:
                     time_logger.stop("Tracking Digit")
                 if valid:

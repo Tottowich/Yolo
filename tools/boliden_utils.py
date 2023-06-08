@@ -24,13 +24,14 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))
 from typing import Dict, Optional, Tuple, TypeVar, Union
 
-from models.common import DetectMultiBackend
+from ultralytics import YOLO
+# from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
+# from ultralytics.yolo.data.dataloaders.stream_loaders import LoadImages  # , LoadStreams
+from ultralytics.yolo.utils.plotting import Annotator, colors
+from ultralytics.yolo.utils.torch_utils import select_device, time_sync
+from ultralytics.yolo.utils import LOGGER
+from tools.StreamLoader import LoadStreams, LoadImages
 from tools.transmitter import Transmitter
-from utils.augmentations import letterbox
-from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
-from utils.general import LOGGER, check_img_size, non_max_suppression, scale_coords
-from utils.plots import Annotator, colors
-from utils.torch_utils import select_device, time_sync
 
 # FALLBACK LIST OF POSSIBLE COMBINATIONS IF FILE WITH COMBINATIONS IS NOT PROVIDED
 LIST_OF_COMB = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1505","1506",
@@ -55,12 +56,11 @@ def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
     assert logger is not None, "Logger object is not passed"
     logger.info(f"{Fore.GREEN}Predictions:{Style.RESET_ALL}")
     class_count = np.zeros((len(names),1), dtype=np.int16)
-    for i,det in enumerate(pred):
-        if len(det):
-            for j,(*xyxy, conf, cls) in enumerate(det):
-                c = int(cls)
-                class_count[c] += 1
-    for i,name in enumerate(names):
+    if len(pred):
+        for j,(*xyxy, conf, cls) in enumerate(pred):
+            c = int(cls)
+            class_count[c] += 1
+    for i, name in enumerate(names):
         if class_count[i]>0:
             logger.info(f"{Fore.GREEN}{name}:{Style.RESET_ALL} {class_count[i]}")
     logger.info(f"{Fore.GREEN}Total:{Style.RESET_ALL} {np.sum(class_count)}")
@@ -165,6 +165,12 @@ def visualize_yolo_2D(pred:np.ndarray,
             cv2.imshow(image_name,img0)
             cv2.waitKey(1)
         return class_string
+from ultralytics.yolo.engine.results import Results
+def visualize_new(pred:Results, img0:np.ndarray=None,image_name:str="Object Predictions")->None:
+    plot = pred.plot(img_gpu=img0)[0].transpose(1,2,0)
+    assert isinstance(plot,np.ndarray), f"plot must be a np.ndarray, got {type(plot)}"
+    cv2.imshow(image_name,cv2.cvtColor(plot,cv2.COLOR_RGB2BGR))
+    cv2.waitKey(1)
 
 class TimeLogger:
     """
@@ -407,6 +413,8 @@ def increase_contrast(img:np.ndarray)->np.ndarray:
     img = clahe.apply(img)
     img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
     return img
+
+
 def initialize_yolo_model(args):
     """
     Initialize YOLO model.
@@ -417,13 +425,10 @@ def initialize_yolo_model(args):
     """
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=half)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
+    model = YOLO(args.weights, task='detect')
+    names= model.names
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    return model,imgsz,names
+    return model,half,names
 
 def initialize_network(args):
     """
@@ -435,15 +440,11 @@ def initialize_network(args):
     """
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=half)
-    memory_usage(model)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
+    model = YOLO(args.weights, task='detect')
+    names = list(model.names.values())
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
     example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    flop_counter(model, example_img)
+    # flop_counter(model, example_img) # REMOVED
     # Create file to save logs to.
     if args.save_time_log:
         dir_path = create_logging_dir(args.name_run, ROOT / "logs",args)
@@ -451,10 +452,10 @@ def initialize_network(args):
         dir_path = None
     source = args.source
     if source is not None and (os.path.isfile(source) or os.path.isdir(source)):
-        live = LoadImages(path=source,img_size=imgsz,stride=stride,auto=args.auto,reverse=False)
+        live = LoadImages(path=source, imgsz=imgsz,vid_stride=args.vid_stride)
     elif args.webcam:
         source = args.webcam
-        live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto, to_gray=False)
+        live = LoadStreams(sources=source, imgsz=imgsz,vid_stride=args.vid_stride)
     else:
         raise ValueError("Invalid source. Or please specify that the source is a webcam. via --webcam flag.")
 
@@ -516,18 +517,14 @@ def initialize_digit_model(args,logger=None):
         args: Arguments from the command line.
     """
     device = select_device(args.device)
-    half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    print(f"PRE CREATION")
-    model = DetectMultiBackend(args.weights_digits, device=device, dnn=False, data=args.data_digit, fp16=half)
-    print(f"POST CREATION")
-    memory_usage(model)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
-    imgsz = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
+    half   = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
+    model  = YOLO(args.weights_digits, task='detect')
+    names  = model.names
+    # memory_usage(model)
+    names   = model.names
+    imgsz   = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
     example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    flop_counter(model, example_img)
+    # flop_counter(model, example_img)
     
     from DigitDetector import DigitDetector  # Import here to avoid circular import.
     dd = DigitDetector(model=model,

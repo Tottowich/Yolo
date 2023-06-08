@@ -8,10 +8,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import time
-from utils.general import non_max_suppression
-from utils.augmentations import letterbox
 from boliden_utils import visualize_yolo_2D,numpy_to_tuple, ROOT
-
+from ultralytics.yolo.data.augment import LetterBox
 class DigitPrediction:
     """
     Class to store separate predictions of the digit detector.
@@ -199,7 +197,7 @@ class DigitSequence:
                 if isinstance(pred,torch.Tensor):
                     pred = pred.cpu().numpy()
                 for p in pred:
-                    digit_predictions.append(DigitPrediction(label=int(p[5]),sequence_order=None,score=float(p[4]),xyxy=numpy_to_tuple(p[:4]),img_size=self.img_size,verbose=self.verbose,logger=self.logger))
+                    digit_predictions.append(DigitPrediction(label=int(p[5]), sequence_order=None, score=float(p[4]),xyxy=numpy_to_tuple(p[:4]), img_size=self.img_size, verbose=self.verbose, logger=self.logger))
         return digit_predictions
     def sort_by_x(self):
         """
@@ -216,8 +214,6 @@ class DigitSequence:
     def __repr__(self):
         s = [f"({digit.label},{digit.score:3f})" for digit in self.digit_sequence]
         return f"DigitSequence({s}->{self.str_seq})"
-    # def __str__(self) -> str:
-    #     return self.str_seq
 class DigitPredictionTracker:
     """
     Class to track the predictions of digits.
@@ -500,6 +496,7 @@ class DigitDetector:
                                                 verbose=verbose,
                                                 logger=logger,
                                               )
+        self.LB = LetterBox(img_size)
         self.device = device
         self.verbose = verbose
         self.logger = logger
@@ -511,7 +508,6 @@ class DigitDetector:
         # self.reshaper = torchvision.transforms.Resize(img_size)
         self.visualize = visualize
         self.wait = wait
-        assert self.device == self.model.device, f"Device of model and detector must be the same. Got {self.device} and {self.model.device}"
         if self.verbose:
             self.logger.info("Initializing DigitDetector...")
             self.logger.info(f"Model: {self.model.__class__.__name__}")
@@ -530,19 +526,16 @@ class DigitDetector:
         if isinstance(img0,torch.Tensor):
             img0 = img0.cpu().numpy().transpose(1,2,0) if len(img0.shape) == 3 else img0.cpu().numpy().transpose(0,2,3,1)[0]
         img = self.pre_process(img0)
-        predictions = self.model(img) # Get predictions
+        result = self.model.predict(img, verbose=self.verbose) # Get predictions
+        boxes = result[0].boxes.cpu().numpy()
         """
         Apply NMS, agnostic=True is used to disable class specific NMS. 
         Remove overlapping predictions no mather the class.
         """
-        predictions = non_max_suppression(predictions,conf_thres=self.conf_threshold,iou_thres=self.iou_threshold, agnostic=True) 
-        predictions = [pred.detach().cpu().numpy() for pred in predictions]
-        sequence, valid = self.tracker.update(predictions,img)
-        # if self.visualize:
-        #     visualize_yolo_2D(img0=img0,pred=predictions,names=self.classes, rescale=True, img=img, image_name="Digit Detector")
+        sequence, valid = self.tracker.update(boxes, img)
         if self.verbose:
             self.logger.info(f"Sequence: {sequence} from {f'{Fore.GREEN}valid{Style.RESET_ALL}' if valid else f'{Fore.RED}invalid{Style.RESET_ALL}'} sequence.")
-        return sequence, valid, predictions, img0, img
+        return sequence, valid, result, boxes
     def update(self,img0:np.ndarray)->Union[None,DigitSequence]:
         """
         Update the DigitDetector. Make sure that time consistency is maintained.
@@ -574,10 +567,14 @@ class DigitDetector:
         if isinstance(img,torch.Tensor):
             img = img.to(self.device) # Normalize
         else:
-            img,_,_ = letterbox(img,self.img_size,auto=False)
-            img = torch.from_numpy(img).to(self.device) # Move to device
-        img = img.permute(2,0,1) # (H,W,C) -> (C,H,W)
-        img = img.unsqueeze(0)/255 # Add batch dimension and normalize image.
+            img = self.LB(image=img)
+            img = np.stack(img)
+            if len(img.shape) == 3:
+                img = np.expand_dims(img,axis=0)
+            img = img[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+            img = np.ascontiguousarray(img)  # contiguous
+            img = torch.from_numpy(img)
+        # img /= 255.0  # 0 - 255 to 0.0 - 1.0
         return img
 
     def __repr__(self):

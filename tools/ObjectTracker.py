@@ -82,18 +82,16 @@ class RegionPredictionsTracker:
             "class": None,
         }
         #img0 = np.ascontiguousarray(img0)
-        for i,det in enumerate(pred):
-            if len(det): # if there is a detection
-                #det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
-                for j,(*xyxy, conf, cls) in enumerate(det):
-                    if int(cls) == self.class_to_track:
-                        area = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])/(self.img0_size[0]*self.img0_size[1]) # Procentage of the image size, float
-                        if area > largest_attributes["largest_area"]:
-                            largest_attributes["index"] = j
-                            largest_attributes["confidence"] = float(conf)
-                            largest_attributes["largest_area"] = float(area)
-                            largest_attributes["image"] = get_cut_out(img0,xyxy,offset=OFFSET)
-                            largest_attributes["class"] = int(cls)
+        if len(pred): # if there is a detection
+            for j,(*xyxy, conf, cls) in enumerate(pred):
+                if int(cls) == self.class_to_track:
+                    area = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])/(self.img0_size[0]*self.img0_size[1]) # Procentage of the image size, float
+                    if area > largest_attributes["largest_area"]:
+                        largest_attributes["index"] = j
+                        largest_attributes["confidence"] = float(conf)
+                        largest_attributes["largest_area"] = float(area)
+                        largest_attributes["image"] = get_cut_out(img0,xyxy,offset=OFFSET)
+                        largest_attributes["class"] = int(cls)
         return largest_attributes if largest_attributes["largest_area"] > 0 else None
 
     def update(self,predictions:np.ndarray,img0:np.ndarray,img:torch.Tensor)->Union[None,Dict[str,Union[np.ndarray,float]]]:
