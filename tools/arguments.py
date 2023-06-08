@@ -26,8 +26,8 @@ def parse_config():
 
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=448, help='inference size h,w')
     parser.add_argument('--data', type=str, default=ROOT / "./TrainedModels/Object/data.yaml", help='(optional) dataset.yaml path')
-    parser.add_argument('--max_det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--conf_thres', type=float, default=0.2, help='confidence threshold')
+    parser.add_argument('--max_det', type=int, default=10, help='maximum detections per image')
+    parser.add_argument('--conf_thres', type=float, default=0.6, help='confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.1, help='NMS IoU threshold')
     parser.add_argument('--line_thickness', default=3, type=int, help='bounding box thickness (pixels) visualizations')
     parser.add_argument('--hide_labels', default=False, action='store_true', help='hide labels')
@@ -35,7 +35,6 @@ def parse_config():
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference instead of FP32 (default)')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
     parser.add_argument('--device', default='cuda:0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')    
-    parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
     parser.add_argument('--auto', action='store_true', help='auto size using the model')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
     # parser.add_argument('--img_size', nargs='+', type=int, help='Size of input image')
@@ -50,7 +49,7 @@ def parse_config():
     parser.add_argument('--digit_frames', type=int, default=3, help='Take the last n frames to track the certainty of the prediction.')
     parser.add_argument("--weights_digits",type=str,default="./TrainedModels/Digit/digit.onnx",help="Path to model for digit detection")
     parser.add_argument("--conf_digits",type=float,default=0.3,help="Confidence threshold for digit detection")
-    parser.add_argument("--iou_digits",type=float,default=0.1,help="NMS IoU threshold for digit detections")
+    parser.add_argument("--iou_digits",type=float,default=0.2,help="NMS IoU threshold for digit detections")
     parser.add_argument("--ind_thresh",type=float,default=0.1,help="Individual threshold if a score of an individual digit is below this threshold then the sequence is invalid")
     parser.add_argument("--seq_thresh",type=float,default=0.2,help="Sequence threshold if the average score of the sequence is below this threshold then the sequence is invalid")
     parser.add_argument("--out_thresh",type=float,default=0.35,help="Output threshold if the average score of the sequence of sequences is below this threshold then the sequence history is invalid")
@@ -60,6 +59,8 @@ def parse_config():
     parser.add_argument('--combination_file', type=str, default='./TrainedModels/data/combinations.txt', help='(optional) combination.txt path text file with currently valid digit combinations.')
     parser.add_argument('--time', type=int, default=-1
     , help='specify the time to stream data from a sensor')
+    # Webcam should be a string which is the camera index. It should be activated as a boolean.
+    parser.add_argument('--webcam', type=str, default=None, help='specify the webcam index')
     if sys.version_info >= (3,9):
         parser.add_argument('--augment', action='store_true', help='augmented inference')
         parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
@@ -74,13 +75,16 @@ def parse_config():
         parser.add_argument('--disp_pred', action=argparse.BooleanOptionalAction)
         parser.add_argument('--disp_time', action=argparse.BooleanOptionalAction)
         parser.add_argument('--transmit', action=argparse.BooleanOptionalAction)
-        parser.add_argument('--webcam', action=argparse.BooleanOptionalAction)
         parser.add_argument('--log_all', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     if isinstance(args.imgsz, list) and len(args.imgsz) == 1:
         args.imgsz = args.imgsz[0]
     if isinstance(args.imgsz,int):
         args.imgsz = (args.imgsz, args.imgsz)
+    if isinstance(args.imgsz_digit, list) and len(args.imgsz_digit) == 1:
+        args.imgsz_digit = args.imgsz_digit[0]
+    if isinstance(args.imgsz_digit,int):
+        args.imgsz_digit = (args.imgsz_digit, args.imgsz_digit)        
     with open(args.data,'r') as f:
         try:
             data_config = yaml.safe_load(f)

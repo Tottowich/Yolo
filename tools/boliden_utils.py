@@ -1,44 +1,37 @@
-from ast import For
-from dataclasses import dataclass,field
-from functools import total_ordering
-from multiprocessing.spawn import import_main_path
+import argparse
+import logging
 import os
-from pickletools import float8
 import re
 import sys
-from tabnanny import verbose
-import cv2
 import time
-import yaml
-import torch
-import logging
-import argparse
-import torchvision
-import numpy as np
-import pandas as pd
-from PIL import Image
-import torch.nn as nn
-from copy import copy
-from tqdm import tqdm
 from datetime import datetime
-import matplotlib.pyplot as plt
-from colorama import Fore, Style
 # if __name__=="__main__":
 from pathlib import Path
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import torch
+import yaml
+from colorama import Fore, Style
+from tqdm import tqdm
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0 if __name__ != "__main__" else 1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT)) # Add ROOT
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))
-from tools.transmitter import Transmitter
-from utils.dataloaders import LoadStreams, LoadWebcam, LoadImages
+from typing import Dict, Optional, Tuple, TypeVar, Union
+
 from models.common import DetectMultiBackend
-from utils.general import LOGGER, scale_coords, check_img_size
+from tools.transmitter import Transmitter
 from utils.augmentations import letterbox
+from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
+from utils.general import LOGGER, check_img_size, non_max_suppression, scale_coords
+from utils.plots import Annotator, colors
 from utils.torch_utils import select_device, time_sync
-from utils.general import non_max_suppression
-from utils.plots import Annotator, colors, save_one_box
-from typing import Dict, Union, Tuple, Optional,Dict,TypeVar
+
 # FALLBACK LIST OF POSSIBLE COMBINATIONS IF FILE WITH COMBINATIONS IS NOT PROVIDED
 LIST_OF_COMB = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1505","1506",
                 "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606",
@@ -60,7 +53,7 @@ def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
         logger: Logger for logging.
     """
     assert logger is not None, "Logger object is not passed"
-    logger.info(f"{Fore.GREEN}Predictions:{Style.RESET_ALL}\n")
+    logger.info(f"{Fore.GREEN}Predictions:{Style.RESET_ALL}")
     class_count = np.zeros((len(names),1), dtype=np.int16)
     for i,det in enumerate(pred):
         if len(det):
@@ -145,25 +138,19 @@ def visualize_yolo_2D(pred:np.ndarray,
     if rescale:
         assert img is not None, "Image is not passed"
     for i,det in enumerate(pred):
-        
-        #img0 = np.ascontiguousarray(copy(img).squeeze().permute(1,2,0).cpu().numpy())
         annotator = Annotator(img0, line_width=line_thickness, example=str(names))
         if len(det):
             if rescale:
                 det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
             
-            i = 0
             classes = []
             pos_x = []
-            for j,(*xyxy, conf, cls) in enumerate(det):#reversed(det)):
+            for *xyxy, conf, cls in det:
                 c = int(cls)  # integer class
                 if classes_not_to_show is not None and c in classes_not_to_show:
                     continue
                 label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                i += 1
                 annotator.box_label(xyxy, label, color=colors(c, True))
-                # classes.append(c)
-                # pos_x.append(xyxy[0])
             img0 = annotator.result()
             class_string = ""
             while len(classes)>0:
@@ -466,8 +453,8 @@ def initialize_network(args):
     if source is not None and (os.path.isfile(source) or os.path.isdir(source)):
         live = LoadImages(path=source,img_size=imgsz,stride=stride,auto=args.auto,reverse=False)
     elif args.webcam:
-        source = "0"
-        live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto,to_gray=False)
+        source = args.webcam
+        live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto, to_gray=False)
     else:
         raise ValueError("Invalid source. Or please specify that the source is a webcam. via --webcam flag.")
 
@@ -475,7 +462,7 @@ def initialize_network(args):
     log_file = None if not args.log_all else dir_path / "full_log.txt"
 
     logger = create_logger(log_file=log_file)
-    from ObjectTracker import RegionPredictionsTracker # Import here to avoid circular import.
+    from ObjectTracker import RegionPredictionsTracker  # Import here to avoid circular import.
     pred_tracker = RegionPredictionsTracker(frames_to_track=args.object_frames,
                                       img_size=imgsz,
                                       threshold=args.tracker_thresh,
@@ -542,7 +529,7 @@ def initialize_digit_model(args,logger=None):
     model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
     flop_counter(model, example_img)
     
-    from DigitDetector import DigitDetector # Import here to avoid circular import.
+    from DigitDetector import DigitDetector  # Import here to avoid circular import.
     dd = DigitDetector(model=model,
                         img_size=imgsz,
                         device=device,
@@ -606,15 +593,12 @@ def test_progbar():
         start1 = time.monotonic()
         pb.step()
         end1 = time.monotonic()
-        # pb2.step()
         diff1 = end1 - start1
         diff1s.append(diff1)
         time.sleep(0.00001)
     pb.n = pb.total
     pb.close()
     print("\n",np.mean(diff1s))
-# if __name__=="__main__":
-#     test_progbar()
 def initialize_pbar(duration,live)->ProgBar:
     pbar = ProgBar()
 def norm_preds(pred,im0s):
@@ -631,11 +615,7 @@ def norm_preds(pred,im0s):
             pred[i][:,:4] = xyxy
     return pred
 def flop_counter(model,x,**kwargs):
-    from thop import profile, clever_format
-    # if kwargs.get("context",None) is None:
-    #     flops, params = profile(model, inputs=(x,),verbose=False)
-    # else:
-    #     flops, params = profile(model, inputs=(x,kwargs.get("context",None)),verbose=False)
+    from thop import profile
     if not isinstance(x,tuple):
         flops, params = profile(model, inputs=(x,),verbose=False)
     else:
@@ -648,60 +628,3 @@ def memory_usage(model):
     mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
     mem = mem_params + mem_bufs # in bytes
     print(f"{model.__class__.__name__} has {mem/1e6:.2f} MBytes of memory")
-""" TESTING """
-# def arguments():
-#     parser = argparse.ArgumentParser(description="Digit Detection")
-#     parser.add_argument("--weights_digits",type=str,default="./runs/train/GrayBabyElephant/weights/best.pt",help="Path to model")
-#     parser.add_argument("--test_img",type=str,help="Path to video")
-#     parser.add_argument("--output_digits",type=str,help="Path to output video")
-#     parser.add_argument("--iou_digits",type=float,default=0.1,help="IOU threshold")
-#     parser.add_argument("--conf_digits",type=float,default=0.1,help="Confidence threshold")
-#     parser.add_argument("--frames_to_track",type=int,default=5,help="Number of frames to track")
-#     parser.add_argument("--ind_thresh",type=float,default=0.5,help="Individual threshold")
-#     parser.add_argument("--seq_thresh",type=float,default=0.5,help="Sequence threshold")
-#     parser.add_argument("--out_thresh",type=float,default=0.5,help="Output threshold")
-#     parser.add_argument("--verbose",action="store_true",help="Whether to print information")
-#     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference instead of FP32 (default)')
-#     parser.add_argument('--device', default='cuda:0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')    
-#     parser.add_argument('--data', type=str, default=ROOT / './data/svhn.yaml', help='(optional) dataset.yaml path')
-
-#     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=448, help='inference size h,w')
-
-#     args = parser.parse_args()
-#     if isinstance(args.imgsz, list) and len(args.imgsz) == 1:
-#         args.imgsz = args.imgsz[0]
-#     return args
-# if __name__=="__main__":
-#     # Random numpy array of integers with 3 digits, i.e. 100-999.
-#     arr = np.random.randint(100,2000,size=(20)).tolist()
-#     # print(arr)
-#     args = arguments()
-#     model,device,img_size,names = initialize_digit_model(args)
-#     logger = create_logger()
-#     # dpt = DigitPredictionTracker(list_of_combinations=arr,verbose=args.verbose,logger=logger)
-#     dd = DigitDetector(
-#                         model=model,
-#                         img_size=img_size,
-#                         device=device,
-#                         verbose=args.verbose,
-#                         logger=logger,
-#                         iou_threshold=args.iou_digits,
-#                         frames_to_track=args.digit_frames,
-#                         conf_threshold=args.conf_digits,
-#                         ind_threshold=args.ind_thresh,
-#                         seq_threshold=args.seq_thresh,
-#                         output_threshold=args.out_thresh,
-#                         list_of_combinations=arr,
-#                        )
-#     img0 = load_img(args.test_img)
-#     img0 = to_gray(img0)
-#     img0 = increase_contrast(img0)
-#     t1 = time.time()
-#     sequence, valid = dd.detect(img0)
-#     t2 = time.time()
-#     print(f"Time taken: {t2-t1}")
-#     print(sequence,valid)
-#     t1 = time.time()
-#     sequence, valid = dd.detect(img0)
-#     t2 = time.time()
-#     print(f"Time taken: {t2-t1}")

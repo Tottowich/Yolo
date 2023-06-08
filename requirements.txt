@@ -26,8 +26,6 @@ Requests==2.31.0
 scipy==1.10.1
 seaborn==0.12.2
 setuptools==67.8.0
-tensorflow==2.12.0
-tensorflowjs==4.6.0
 tensorrt==8.6.1
 tflite_runtime==2.12.0
 thop==0.1.1.post2209072238

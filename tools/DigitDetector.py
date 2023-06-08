@@ -4,8 +4,13 @@ import numpy as np
 import logging
 from typing import Union,Tuple
 from colorama import Fore, Style
-from boliden_utils import torch,np,nn,time
-from boliden_utils import non_max_suppression, letterbox, visualize_yolo_2D,numpy_to_tuple, ROOT
+import torch
+import torch.nn as nn
+import numpy as np
+import time
+from utils.general import non_max_suppression
+from utils.augmentations import letterbox
+from boliden_utils import visualize_yolo_2D,numpy_to_tuple, ROOT
 
 class DigitPrediction:
     """
@@ -530,14 +535,14 @@ class DigitDetector:
         Apply NMS, agnostic=True is used to disable class specific NMS. 
         Remove overlapping predictions no mather the class.
         """
-        predictions = non_max_suppression(predictions,conf_thres=self.conf_threshold,iou_thres=self.iou_threshold,agnostic=True) 
+        predictions = non_max_suppression(predictions,conf_thres=self.conf_threshold,iou_thres=self.iou_threshold, agnostic=True) 
         predictions = [pred.detach().cpu().numpy() for pred in predictions]
         sequence, valid = self.tracker.update(predictions,img)
-        if self.visualize:
-            visualize_yolo_2D(img0=img0,pred=predictions,names=self.classes,rescale=True,img=img,image_name="Digit Detector")
+        # if self.visualize:
+        #     visualize_yolo_2D(img0=img0,pred=predictions,names=self.classes, rescale=True, img=img, image_name="Digit Detector")
         if self.verbose:
             self.logger.info(f"Sequence: {sequence} from {f'{Fore.GREEN}valid{Style.RESET_ALL}' if valid else f'{Fore.RED}invalid{Style.RESET_ALL}'} sequence.")
-        return sequence, valid
+        return sequence, valid, predictions, img0, img
     def update(self,img0:np.ndarray)->Union[None,DigitSequence]:
         """
         Update the DigitDetector. Make sure that time consistency is maintained.
