@@ -5,9 +5,11 @@ Xr-Synthesize*/
 runs/
 evolve/
 best_weights/
-*.jpg
+train*.jpg
+val*.jpg
+test*.jpg
 *.jpeg
-*.png
+#*.png
 *.bmp
 *.tif
 *.tiff
