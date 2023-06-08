@@ -8,6 +8,9 @@ best_weights/
 train*.jpg
 val*.jpg
 test*.jpg
+train*.png
+val*.png
+/yolov8/schenk8n/test_results/
 *.jpeg
 #*.png
 *.bmp
