@@ -30,13 +30,13 @@ EPS = 1e-8
 @torch.no_grad() # No grad to save memory
 def main(args: argparse.Namespace=None) -> None:
     if args is None:
-        args, data_config = parse_config()
+        args, data = parse_config()
     init = True
     cudnn.benchmark = True  # set True to speed up constant image size inference
-    model, names, device, live, object_tracker, transmitter, time_logger, logger = initialize_network(args)
+    model, names_object, device, live, object_tracker, transmitter, time_logger, logger = initialize_network(args,data)
     # Transmitter is currently unused
     if args.track_digits:
-        dd = initialize_digit_model(args,logger=logger)
+        dd, names_digit = initialize_digit_model(args,data,logger=logger)
     else:
         dd = None
     
@@ -97,12 +97,12 @@ def main(args: argparse.Namespace=None) -> None:
         if log_time:
             time_logger.stop("Post Processing")
         if args.disp_pred:
-            disp_pred(pred,names,logger)
+            disp_pred(pred,names_object,logger)
         if args.visualize:
             if log_time:
                 time_logger.start("Visualize")
-            visualize_new(pred=results, img0=img0, image_name="Schenk/Sign Predictions")
-            # visualize_yolo_2D(results, img0=img0, img=img, args=args, names=names, line_thickness=3)#, classes_not_to_show=[0])
+            # visualize_new(pred=results, img0=np.array(img), image_name="Schenk/Sign Predictions")
+            visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names_object, line_thickness=3)#, classes_not_to_show=[0])
             if log_time:
                 time_logger.stop("Visualize")
 
@@ -120,9 +120,12 @@ def main(args: argparse.Namespace=None) -> None:
                 if log_time:
                     time_logger.start("Tracking Digit")
                 # Digit Sequence Tracking.
-                sequence, valid, result_digit, boxes_digit = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
+                img0 = best_frame["image"] if best_frame is not None else img0
+                sequence, valid, result_digit, boxes_digit, img = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
+                
                 if args.visualize:
-                    visualize_new(pred=result_digit,img0=best_frame["image"],image_name="Digit Detector")
+                    # visualize_new(pred=result_digit,img0=np.array(img),image_name="Digit Detector")
+                    visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names_digit, line_thickness=3)
                 if log_time:
                     time_logger.stop("Tracking Digit")
                 if valid:

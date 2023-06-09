@@ -44,7 +44,7 @@ OFFSET = 30 # ,30]
 def xyxy2xywh(xyxy:tuple)->tuple:
     x1,y1,x2,y2 = xyxy
     return ((x1+x2)/2,(y1+y2)/2,x2-x1,y2-y1)
-def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
+def disp_pred(pred:Union[np.ndarray,list],names:list, logger:LOGGER)->None:
     """
     Display each prediction made,
     and how many of each class is predicted.
@@ -426,11 +426,11 @@ def initialize_yolo_model(args):
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
     model = YOLO(args.weights, task='detect')
-    names= model.names
+    names = model.names
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
     return model,half,names
 
-def initialize_network(args):
+def initialize_network(args, data):
     """
     Initialize the network.
     Create live streaming object to stream data from the sensor.
@@ -441,7 +441,7 @@ def initialize_network(args):
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
     model = YOLO(args.weights, task='detect')
-    names = list(model.names.values())
+    names = data["object"]["names"]
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
     example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
     # flop_counter(model, example_img) # REMOVED
@@ -510,7 +510,7 @@ def initialize_timer(time_logger:TimeLogger,args,transmitter=None):
 
     return time_logger
 
-def initialize_digit_model(args,logger=None):
+def initialize_digit_model(args,data,logger=None):
     """
     Initialize the digit detection model with tracking.
     Args:
@@ -519,11 +519,8 @@ def initialize_digit_model(args,logger=None):
     device = select_device(args.device)
     half   = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
     model  = YOLO(args.weights_digits, task='detect')
-    names  = model.names
-    # memory_usage(model)
-    names   = model.names
+    names  = data["digit"]["names"]
     imgsz   = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
-    example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
     # flop_counter(model, example_img)
     
     from DigitDetector import DigitDetector  # Import here to avoid circular import.
@@ -542,7 +539,7 @@ def initialize_digit_model(args,logger=None):
                         list_of_combinations=args.combination_file if args.combination_file is not None else LIST_OF_COMB, # TODO: Add the list of combinations to be tracked as read from a file.
                         visualize=args.visualize,
                         wait=args.wait,)
-    return dd
+    return dd, names
 class ProgBar(tqdm):
     def __init__(self, is_live:bool=False,duration:Union[float,int]=-1,*args, **kwargs):
         super().__init__(*args, **kwargs,total=duration)

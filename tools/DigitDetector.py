@@ -535,7 +535,7 @@ class DigitDetector:
         sequence, valid = self.tracker.update(boxes, img)
         if self.verbose:
             self.logger.info(f"Sequence: {sequence} from {f'{Fore.GREEN}valid{Style.RESET_ALL}' if valid else f'{Fore.RED}invalid{Style.RESET_ALL}'} sequence.")
-        return sequence, valid, result, boxes
+        return sequence, valid, result, boxes, img
     def update(self,img0:np.ndarray)->Union[None,DigitSequence]:
         """
         Update the DigitDetector. Make sure that time consistency is maintained.

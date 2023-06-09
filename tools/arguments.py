@@ -86,10 +86,16 @@ def parse_config():
         args.imgsz_digit = args.imgsz_digit[0]
     if isinstance(args.imgsz_digit,int):
         args.imgsz_digit = (args.imgsz_digit, args.imgsz_digit)  
-    with open(args.data,'r') as f:
-        try:
-            data_config = yaml.safe_load(f)
-        except:
-            raise ValueError(f"Invalid data config file: {args.data}")
+    data = {
+        "object": read_yaml(args.data),
+        "digit": read_yaml(args.data_digit)
+    }
+    
 
-    return args, data_config
+    return args, data
+def read_yaml(path):
+     with open(path,'r') as f:
+        try:
+            return yaml.safe_load(f)
+        except:
+            raise ValueError(f"Invalid data config file: {path}")

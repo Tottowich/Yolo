@@ -1,7 +1,4 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
-yolo_env*
-Xr-Synthesize*/
-*.ipynb
 runs/
 evolve/
 best_weights/
