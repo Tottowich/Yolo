@@ -180,16 +180,17 @@ class LoadImages:
         else:
             # Read image
             self.count += 1
-            print(path)
             im0 = cv2.imread(path)  # BGR
             if im0 is None:
                 raise FileNotFoundError(f'Image Not Found {path}')
             s = f'image {self.count}/{self.nf} {path}: '
         im = self.LB(image=im0)# letterbox
         im = np.stack(im)
+        im = np.expand_dims(im,axis=0)
         im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
         im = np.ascontiguousarray(im)  # contiguous
         im = torch.from_numpy(im)
+        assert im.shape == torch.Size([self.bs, 3, *self.imgsz]), f'Image size {im.shape} not consistent with batch size {self.bs}'
         return [path], im0, im, s
 
     def _new_video(self, path):

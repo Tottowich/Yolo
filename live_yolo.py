@@ -94,18 +94,6 @@ def main(args: argparse.Namespace=None) -> None:
         pred[:,:4] = scale_boxes(img_shape, pred[:,:4], img0_shape).round()
         if log_time:
             time_logger.stop("Infrence")
-        if device == torch.device("mps"): # Slow NMS on mps -> move to cpu when using mps (Apple Silicon)
-            if log_time:
-                time_logger.start("Reloading CPU")
-            pred = pred.cpu()
-            if log_time:
-                time_logger.stop("Reloading CPU")
-        if log_time:
-            time_logger.start("Post Processing")
-        # pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, agnostic=False, max_det=args.max_det)
-        # pred = scale_preds(preds=pred, img0=img0,img=img) # Returns list of Torch.Tensors. Each tensor is a prediction with shape: [x1,y1,x2,y2,conf,class]
-        if log_time:
-            time_logger.stop("Post Processing")
         if args.disp_pred:
             disp_pred(pred,names_object,logger)
         if args.visualize:

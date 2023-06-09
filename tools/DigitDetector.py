@@ -528,7 +528,7 @@ class DigitDetector:
         if isinstance(img0,torch.Tensor):
             img0 = img0.numpy().transpose(1,2,0) if len(img0.shape) == 3 else img0.numpy().transpose(0,2,3,1)[0]
         img = self.pre_process(img0)
-        results = self.model.predict(img, verbose=self.verbose,agnostic_nms=True, imgsz=self.img_size)[0].cpu().numpy() # Get predictions
+        results = self.model.predict(img, verbose=self.verbose,agnostic_nms=True, imgsz=self.img_size,conf=self.conf_threshold,iou=self.iou_threshold)[0].cpu().numpy() # Get predictions
         pred = results.boxes.data
         """
         Apply NMS, agnostic=True is used to disable class specific NMS. 

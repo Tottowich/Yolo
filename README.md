@@ -113,10 +113,3 @@ Detection algorithm with utilizes both tracking and validation to make accurate 
 ```bash
 python live_yolo.py --webcam "0" --track --track_digits --visualize --time 60 --disp_pred --object_frames 10 --class_to_track 1 --verbose
 ```
-
-I och med den stora AI-vågen som väller över samhället krävs det exremt stora mängder data. Det kan röra sig om hundratals terabyte av bilder eller text som behöver samlas in. 
-Det kan vara enkelt inom vissa områden så som text men andra områden som 3D data är betydligt svårare att samla in och annotera.
-
-Detta sommarprojekt i samarbete med Adopticum och Veoneer ska undersöka möjligheten att använda simulering för att generera data som kan användas för att träna maskininlärningsmodeller som används i självkörande bilar. Specifikt undersöka hur man kan generera lidar punkt moln som är speciellt svåra att samla in och annotera.
-
-Detta skulle spara massvis med tid och pengar och förhoppningsvis resultera i en bättre och säkrare modell. Men samtidigt finns det väldigt få svenska bolag som arbetar mot det samtidigt som det finns och kommer finnas ett ännu större behov av det i framtiden.
