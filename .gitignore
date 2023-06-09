@@ -59,8 +59,9 @@ VOC/
 # Neural Network weights -----------------------------------------------------------------------------------------------
 *.weights
 *.pt
+!best.pt
 *.pb
-*.onnx
+#*.onnx
 !TrainedModels/Object/object.onnx
 !TrainedModels/Digit/digit.onnx
 *.engine
