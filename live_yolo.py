@@ -4,14 +4,14 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import sys
 import time
 from pathlib import Path
-
+from copy import deepcopy
 import torch
 import numpy as np
 from colorama import Fore, Style
 from random_word import RandomWords
 
 from tools.arguments import parse_config
-from tools.gui import GUIWithImages
+from ultralytics.yolo.utils.ops import scale_boxes
 RANDOM_NAME = RandomWords()
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]
@@ -51,6 +51,8 @@ def main(args: argparse.Namespace=None) -> None:
         if not live.mode=="stream" and args.verbose:
             logger.info(f"Image {i}/{len(live)}: {path}")
         img0 = img0[0] if args.webcam else img0
+        img0_shape = img0.shape[:-1]
+        img_shape = img.shape[2:]
         assert isinstance(img0, np.ndarray), f"img0 must be a np.ndarray, got {type(img0)}"
         assert isinstance(img, torch.Tensor), f"img must be a torch.Tensor, got {type(img)}"
         if log_time:
@@ -63,6 +65,7 @@ def main(args: argparse.Namespace=None) -> None:
         if log_time:
             time_logger.start("Pre Processing")
         img = img.half() if args.half else img.float()  # uint8 to fp16/32
+
         # img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if init:
             t1 = time.monotonic()
@@ -80,8 +83,15 @@ def main(args: argparse.Namespace=None) -> None:
 
         if log_time:
             time_logger.start("Infrence")
-        results = model.predict(img, augment=args.augment,verbose=False)[0].cpu().numpy() # Inference
+        results = model.predict(img,
+                                augment=args.augment,
+                                verbose=False,
+                                nms=True,
+                                conf=args.conf_thres,
+                                iou=args.iou_thres,
+                                imgsz=img_shape)[0].cpu().numpy() # Inference
         pred = results.boxes.data
+        pred[:,:4] = scale_boxes(img_shape, pred[:,:4], img0_shape).round()
         if log_time:
             time_logger.stop("Infrence")
         if device == torch.device("mps"): # Slow NMS on mps -> move to cpu when using mps (Apple Silicon)
@@ -102,7 +112,7 @@ def main(args: argparse.Namespace=None) -> None:
             if log_time:
                 time_logger.start("Visualize")
             # visualize_new(pred=results, img0=np.array(img), image_name="Schenk/Sign Predictions")
-            visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names_object, line_thickness=3)#, classes_not_to_show=[0])
+            visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names_object, line_thickness=3, rescale=False)#, classes_not_to_show=[0])
             if log_time:
                 time_logger.stop("Visualize")
 
@@ -121,11 +131,10 @@ def main(args: argparse.Namespace=None) -> None:
                     time_logger.start("Tracking Digit")
                 # Digit Sequence Tracking.
                 img0 = best_frame["image"] if best_frame is not None else img0
-                sequence, valid, result_digit, boxes_digit, img = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
-                
+                sequence, valid, result_digit, pred_digit, img = dd.detect(img0=best_frame["image"]) if not args.force_detect_digits or best_frame is not None else dd.detect(img0)
                 if args.visualize:
                     # visualize_new(pred=result_digit,img0=np.array(img),image_name="Digit Detector")
-                    visualize_yolo_2D(pred, img0=img0, img=img, args=args, names=names_digit, line_thickness=3)
+                    visualize_yolo_2D(pred_digit, img0=img0, img=img, args=args, names=names_digit, line_thickness=3, image_name="Digit Predictions", rescale=True)
                 if log_time:
                     time_logger.stop("Tracking Digit")
                 if valid:

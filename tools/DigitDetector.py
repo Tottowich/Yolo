@@ -192,12 +192,14 @@ class DigitSequence:
             digit_predictions: List of DigitPrediction objects.
         """
         digit_predictions = []
-        for i,pred in enumerate(self.predictions):
-            if len(pred):
-                if isinstance(pred,torch.Tensor):
-                    pred = pred.cpu().numpy()
-                for p in pred:
-                    digit_predictions.append(DigitPrediction(label=int(p[5]), sequence_order=None, score=float(p[4]),xyxy=numpy_to_tuple(p[:4]), img_size=self.img_size, verbose=self.verbose, logger=self.logger))
+        # for i, pred in enumerate(self.predictions):
+        if len(self.predictions):
+            if isinstance(self.predictions,torch.Tensor):
+                pred = self.predictions.cpu().numpy()
+            else:
+                pred = self.predictions
+            for p in pred:
+                digit_predictions.append(DigitPrediction(label=int(p[5]), sequence_order=None, score=float(p[4]),xyxy=numpy_to_tuple(p[:4]), img_size=self.img_size, verbose=self.verbose, logger=self.logger))
         return digit_predictions
     def sort_by_x(self):
         """
@@ -467,7 +469,7 @@ class DigitDetector:
     def __init__(self,
                 model:nn.Module, # A model which takes an image as input and outputs a list of predictions constiting of bounding boxes around digits, predictions should have form : x1, y1,x2,y2, conf, cls.
                 device:torch.device==torch.device("cuda:0"), # Default to GPU.
-                img_size:tuple[int,int]=(448,448), # The size of the images the model was trained on.
+                img_size:tuple[int,int]=(416,416), # The size of the images the model was trained on.
                 # Detection Thresholds
                 iou_threshold:float=0.5, # Intersection over union threshold.
                 conf_threshold:float=0.5, # Confidence threshold.
@@ -524,18 +526,18 @@ class DigitDetector:
         """
 
         if isinstance(img0,torch.Tensor):
-            img0 = img0.cpu().numpy().transpose(1,2,0) if len(img0.shape) == 3 else img0.cpu().numpy().transpose(0,2,3,1)[0]
+            img0 = img0.numpy().transpose(1,2,0) if len(img0.shape) == 3 else img0.numpy().transpose(0,2,3,1)[0]
         img = self.pre_process(img0)
-        result = self.model.predict(img, verbose=self.verbose) # Get predictions
-        boxes = result[0].boxes.cpu().numpy()
+        results = self.model.predict(img, verbose=self.verbose,agnostic_nms=True, imgsz=self.img_size)[0].cpu().numpy() # Get predictions
+        pred = results.boxes.data
         """
         Apply NMS, agnostic=True is used to disable class specific NMS. 
         Remove overlapping predictions no mather the class.
         """
-        sequence, valid = self.tracker.update(boxes, img)
+        sequence, valid = self.tracker.update(pred, img)
         if self.verbose:
             self.logger.info(f"Sequence: {sequence} from {f'{Fore.GREEN}valid{Style.RESET_ALL}' if valid else f'{Fore.RED}invalid{Style.RESET_ALL}'} sequence.")
-        return sequence, valid, result, boxes, img
+        return sequence, valid, results, pred, img
     def update(self,img0:np.ndarray)->Union[None,DigitSequence]:
         """
         Update the DigitDetector. Make sure that time consistency is maintained.

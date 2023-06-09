@@ -31,7 +31,7 @@ class LoadStreams:
         self.imgsz = imgsz
         self.vid_stride = vid_stride  # video frame-rate stride
         sources = Path(sources).read_text().rsplit() if os.path.isfile(sources) else [sources]
-        self.LB = LetterBox(imgsz,auto=True)
+        self.LB = LetterBox(imgsz)
         n = len(sources)
         self.sources = [ops.clean_str(x) for x in sources]  # clean source names for later
         self.imgs, self.fps, self.frames, self.threads = [None] * n, [0] * n, [0] * n, [None] * n
@@ -99,7 +99,7 @@ class LoadStreams:
         im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
         im = np.ascontiguousarray(im)  # contiguous
         im = torch.from_numpy(im)
-
+        assert im.shape == torch.Size([self.bs, 3, *self.imgsz]), f'Image size {im.shape} not consistent with batch size {self.bs}'
         return self.sources, im0, im, ''
     def __len__(self):
         """Return the length of the sources object."""

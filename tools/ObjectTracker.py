@@ -5,6 +5,7 @@ import numpy as np
 from colorama import Fore, Style
 import logging
 from typing import Union,Tuple,Dict,List
+from ultralytics.yolo.utils.ops import scale_boxes
 OFFSET = 30 # Tuple or int, if tuple 4 (x_top, x_bottom, y_left, y_right) offset from bounding box) 
 """
 ObjectTracker class used to validate object detection accros frames and time.
@@ -57,7 +58,7 @@ class RegionPredictionsTracker:
             assert logger is not None, "logger must be specified if verbose is True."
         self.verbose = verbose
         self.logger = logger
-    def get_largest_area(self,pred:list[Union[np.ndarray,torch.Tensor]],img0:np.ndarray,img:torch.Tensor)->Union[Dict[str, Union[int,float,float,np.ndarray]],None]:
+    def get_largest_area(self,pred:Union[np.ndarray,torch.Tensor],img0:np.ndarray,img:torch.Tensor)->Union[Dict[str, Union[int,float,float,np.ndarray]],None]:
         """
         From the predictions made. Return the largest area of the bounding box.
         Args:
@@ -82,6 +83,7 @@ class RegionPredictionsTracker:
             "class": None,
         }
         #img0 = np.ascontiguousarray(img0)
+        # pred[:,:4] = scale_boxes(self.img_size, pred[:,:4], self.img0_size).round()
         if len(pred): # if there is a detection
             for j,(*xyxy, conf, cls) in enumerate(pred):
                 if int(cls) == self.class_to_track:
@@ -90,7 +92,7 @@ class RegionPredictionsTracker:
                         largest_attributes["index"] = j
                         largest_attributes["confidence"] = float(conf)
                         largest_attributes["largest_area"] = float(area)
-                        largest_attributes["image"] = get_cut_out(img0,xyxy,offset=OFFSET)
+                        largest_attributes["image"] = get_cut_out(img0, xyxy, offset=OFFSET)
                         largest_attributes["class"] = int(cls)
         return largest_attributes if largest_attributes["largest_area"] > 0 else None
 
@@ -108,7 +110,7 @@ class RegionPredictionsTracker:
         """
         current_time = time.monotonic()
         self.img_size = img.shape[2:]
-        self.img0_size = img0.shape
+        self.img0_size = img0.shape[:-1]
         largest_attributes = self.get_largest_area(predictions,img0,img)
         best_frame = {}
         if largest_attributes is not None: # If there is a prediction made within the patience time
@@ -134,7 +136,7 @@ class RegionPredictionsTracker:
         if len(self.scores)>self.frames_to_track: # Remove the first element of the list as if it was a queue.
             self.scores.pop(0) 
             self.images.pop(0) 
-        if len(self.scores)==self.frames_to_track: # If the sequence is long enough evaluate 
+        if len(self.scores)>=self.frames_to_track: # If the sequence is long enough evaluate 
             combined_score, best_index = self.evaluate()
             if combined_score>=self.threshold:# and combined_score>=self.best_score: # If the combined score is above the threshold and is better than the previous best score
                 # print(f"Combined score: {combined_score}")
