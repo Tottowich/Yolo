@@ -28,7 +28,7 @@ class LoadStreams:
         torch.backends.cudnn.benchmark = True  # faster for fixed-size inference
         
         self.mode = 'stream'
-        self.imgsz = imgsz
+        self.imgsz = (imgsz,imgsz) if isinstance(imgsz,int) else imgsz
         self.vid_stride = vid_stride  # video frame-rate stride
         sources = Path(sources).read_text().rsplit() if os.path.isfile(sources) else [sources]
         self.LB = LetterBox(imgsz)
@@ -109,6 +109,7 @@ class LoadStreams:
 
 
 class LoadImages:
+
     # YOLOv8 image/video dataloader, i.e. `yolo predict source=image.jpg/vid.mp4`
     def __init__(self, path, imgsz=640, vid_stride=1):
         """Initialize the Dataloader and raise FileNotFoundError if file not found."""
@@ -130,7 +131,7 @@ class LoadImages:
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
 
-        self.imgsz = imgsz
+        self.imgsz = (imgsz,imgsz) if isinstance(imgsz,int) else imgsz
         self.files = images + videos
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv

@@ -10,10 +10,12 @@ import numpy as np
 from tqdm import tqdm
 from datetime import datetime as dt
 from arguments import parse_config
-# from boliden_utils import LoadImages, non_max_suppression
+from typing import Callable
 from ultralytics.yolo.utils.ops import scale_boxes
 from tools.StreamLoader import LoadImages
+from tools.boliden_utils import get_cut_out
 from boliden_utils import initialize_yolo_model, scale_preds, get_cut_out, visualize_yolo_2D,xyxy2xywh,to_gray,increase_contrast,norm_preds
+
 TIMESTAMP = dt.now().strftime("%Y%m%d_%H%M%S")
 class DataExtractor:
     """
@@ -140,7 +142,7 @@ class VerifyPredictions:
                 return "quit"
             else:
                 print("Invalid key press, press 'y' to save image or 'n' to not save image labels.")
-    def verify(self):
+    def verify(self,pre_process:Callable=None):
         """
         Verify predictions made by model.
         """
@@ -150,6 +152,8 @@ class VerifyPredictions:
         # Set pbar to start at current count
         pbar.update(self.start)
         for path, img0, img, *_ in self.data:
+            if pre_process:
+                path, img0, img, *_ = pre_process(path, img0, img, *_)
             pbar.update(1)
             img0_shape = img0.shape[:-1]
             img_shape = img.shape[2:]
@@ -317,11 +321,22 @@ with torch.no_grad():
     if __name__=="__main__":
         args, data = parse_config()
         model, imgsz, names = initialize_yolo_model(args,data)
-        print(names)
         data = LoadImages(args.source,imgsz=imgsz)
         verify = VerifyPredictions(model,data,names,"/Users/theodorjonsson/GithubProjects/Adopticum/BolidenYolo/Datasets/Boliden/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
+        def pre_process(path:str, img0:np.ndarray, img:torch.Tensor, *_):
+            # Read YOLO format labels and extract bbox of class 1
+            label_path = path.replace(".jpg", ".txt").replace(".png", ".txt")
+            labels = np.loadtxt(label_path, delimiter=" ", dtype=np.float32).reshape(-1, 6)
+            labels = labels[labels[:, 0] == 1]
+            # Extract largest bbox
+            if len(labels):
+                largest = np.argmax(labels[:, 4]*labels[:, 5])
+                labels = labels[largest]
+                cls,*xyxy = labels
+
         verify.verify()
-        # data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/","../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
+        # data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/",
+        # "../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
         # data_splitter.create_folders()
         # data_splitter.get_paths()
         # data_splitter.split_data()

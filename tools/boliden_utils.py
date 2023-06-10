@@ -623,3 +623,10 @@ def memory_usage(model):
     mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
     mem = mem_params + mem_bufs # in bytes
     print(f"{model.__class__.__name__} has {mem/1e6:.2f} MBytes of memory")
+
+def int2tuple(possible_int:Union[int,list,tuple])->tuple:
+    if isinstance(possible_int, int):
+        possible_int = (possible_int, possible_int)
+    elif isinstance(possible_int, list):
+        possible_int = tuple(possible_int)
+    return possible_int
