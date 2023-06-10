@@ -137,6 +137,7 @@ class LoadImages:
         self.mode = 'image'
         self.vid_stride = vid_stride  # video frame-rate stride
         self.bs = 1
+
         self.LB = LetterBox(imgsz)
         if any(videos):
             self.orientation = None  # rotation degrees

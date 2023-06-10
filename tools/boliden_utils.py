@@ -416,7 +416,7 @@ def increase_contrast(img:np.ndarray)->np.ndarray:
     return img
 
 
-def initialize_yolo_model(args):
+def initialize_yolo_model(args, data):
     """
     Initialize YOLO model.
     Args:
@@ -427,9 +427,9 @@ def initialize_yolo_model(args):
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
     model = YOLO(args.weights, task='detect')
-    names = model.names
+    names = data["object"]["names"]
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    return model,half,names
+    return model,imgsz,names
 
 def initialize_network(args, data):
     """
@@ -453,7 +453,7 @@ def initialize_network(args, data):
         dir_path = None
     source = args.source
     if source is not None and (os.path.isfile(source) or os.path.isdir(source)):
-        live = LoadImages(path=source, imgsz=imgsz,vid_stride=args.vid_stride)
+        live = LoadImages(path=source, imgsz=imgsz, vid_stride=args.vid_stride)
     elif args.webcam:
         source = args.webcam
         live = LoadStreams(sources=source, imgsz=imgsz,vid_stride=args.vid_stride)
@@ -600,14 +600,14 @@ def norm_preds(pred,im0s):
     """
     Normalize predictions to image size.
     """
-    for i,p in enumerate(pred):
-        if p is not None:
-            xyxy = p[:, :4]
-            xyxy[:, 0] /= im0s.shape[1]
-            xyxy[:, 1] /= im0s.shape[0]
-            xyxy[:, 2] /= im0s.shape[1]
-            xyxy[:, 3] /= im0s.shape[0]
-            pred[i][:,:4] = xyxy
+    pred[:, :4] /= np.array(im0s.shape)[[1, 0, 1, 0]]
+        # if p is not None:
+        #     xyxy = p[:, :4]
+        #     xyxy[:, 0] /= im0s.shape[1]
+        #     xyxy[:, 1] /= im0s.shape[0]
+        #     xyxy[:, 2] /= im0s.shape[1]
+        #     xyxy[:, 3] /= im0s.shape[0]
+        #     pred[i][:,:4] = xyxy
     return pred
 def flop_counter(model,x,**kwargs):
     from thop import profile

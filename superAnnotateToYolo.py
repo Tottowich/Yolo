@@ -312,7 +312,7 @@ def create_dataset(args):
     print(f"Creating dataset with {n_images_split[0]} train images, {n_images_split[1]} val images and {n_images_split[2]} test images.")
     train_dir, val_dir, test_dir = create_output_dir(args.output,args.exists_ok)
     init = False
-    for set,dir in zip([train_set, val_set, test_set], [train_dir, val_dir, test_dir]):
+    for set, dir in zip([train_set, val_set, test_set], [train_dir, val_dir, test_dir]):
         for image_name in set:
             image_path = get_image_path(image_name, args.input)
             image = get_image(image_path)

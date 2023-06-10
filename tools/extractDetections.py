@@ -10,8 +10,10 @@ import numpy as np
 from tqdm import tqdm
 from datetime import datetime as dt
 from arguments import parse_config
-from boliden_utils import LoadImages, non_max_suppression
-from boliden_utils import initialize_yolo_model, scale_preds, get_cut_out,visualize_yolo_2D,xyxy2xywh,to_gray,increase_contrast,norm_preds
+# from boliden_utils import LoadImages, non_max_suppression
+from ultralytics.yolo.utils.ops import scale_boxes
+from tools.StreamLoader import LoadImages
+from boliden_utils import initialize_yolo_model, scale_preds, get_cut_out, visualize_yolo_2D,xyxy2xywh,to_gray,increase_contrast,norm_preds
 TIMESTAMP = dt.now().strftime("%Y%m%d_%H%M%S")
 class DataExtractor:
     """
@@ -78,11 +80,10 @@ class VerifyPredictions:
         data: LoadImages.
         output_folder: Path where output should be stored.
     """
-    def __init__(self, model, data, output_folder,count_auto_annotated=0,count_manual_annotated=0,skipped=0):
+    def __init__(self, model, data:LoadImages, names:list, output_folder:str, count_auto_annotated=0,count_manual_annotated=0,skipped=0):
         self.model = model
-        self.names = self.model.names
-        self.stride = self.model.stride
         self.data = data
+        self.names = names
         self.output_folder = output_folder
         self.count_auto_annotated = count_auto_annotated
         self.count_manual_annotated = count_manual_annotated
@@ -115,12 +116,10 @@ class VerifyPredictions:
         if auto:
             cv2.imwrite(os.path.join(self.output_folder,self.auto_name, str(TIMESTAMP)+"_"+str(self.count_auto_annotated)+".jpg"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
             with open(os.path.join(self.output_folder,self.auto_name,str(TIMESTAMP)+"_"+str(self.count_auto_annotated)+".txt"),"w") as f:
-                for lbl in lbls:
-                    lbl = lbl.cpu().numpy()
-                    for l in lbl:
-                        x1,y1,x2,y2,conf,cls = l[:6]
-                        x,y,w,h = xyxy2xywh((x1,y1,x2,y2))
-                        f.write(" ".join(str(i) for i in [int(cls),x,y,w,h])+"\n")
+                for l in lbls:
+                    x1,y1,x2,y2,conf,cls = l[:6]
+                    x,y,w,h = xyxy2xywh((x1,y1,x2,y2))
+                    f.write(" ".join(str(i) for i in [int(cls),x,y,w,h])+"\n")
             self.count_auto_annotated += 1
         else:
             cv2.imwrite(os.path.join(self.output_folder,self.manual_name, str(TIMESTAMP)+"_"+str(self.count_manual_annotated)+".jpg"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
@@ -150,27 +149,28 @@ class VerifyPredictions:
         pbar = tqdm(total=len(self.data))
         # Set pbar to start at current count
         pbar.update(self.start)
-        for path, img, im0s, vid_cap,_ in self.data:
+        for path, img0, img, *_ in self.data:
             pbar.update(1)
+            img0_shape = img0.shape[:-1]
+            img_shape = img.shape[2:]
             # print(im0s.shape)
-            img = to_gray(img.transpose(1,2,0))
-            img = increase_contrast(img)
-            img = img.transpose(2,0,1)
-            img = torch.from_numpy(img).to(self.model.device)
-            img = img.float()
-            img /= 255.0
-            if img.ndimension() == 3:
-                img = img.unsqueeze(0)
-            pred = self.model(img, augment=True)
-            pred = non_max_suppression(pred, 0.05, 0.45, classes=None, agnostic=True)
-            pred = scale_preds(pred,img0=im0s,img=img)
             winname = "Whole Image"
             cv2.namedWindow(winname)        # Create a named window
             cv2.moveWindow(winname, 40,30)
-            cv2.imshow(winname,cv2.resize(im0s,(640,im0s.shape[0]*640//im0s.shape[1])))
-            class_string = visualize_yolo_2D(pred,img0=im0s,img=img,names=self.names,wait=False)
-            random_show = random.random() < 0.1
-            save = self.get_input() #if class_string in self.valid_list or random_show else self.skip_or_false(false_prob=0.2)
+            results = model.predict(img,
+                                    augment=args.augment,
+                                    verbose=False,
+                                    nms=True,
+                                    conf=0.2,
+                                    iou=0.01,
+                                    max_det=6,
+                                    imgsz=img_shape)[0].cpu().numpy() # Inference
+            pred = results.boxes.data
+            pred[:,:4] = scale_boxes(img_shape, pred[:,:4], img0_shape).round()            
+            cv2.imshow(winname,cv2.resize(img0,(640,img0.shape[0]*640//img0.shape[1])))
+            class_string = visualize_yolo_2D(pred,img0=img0,img=img,names=self.names)
+            random_show = random.random() < 0.2
+            save = self.get_input() # if (class_string in self.valid_list or random_show) else False
             # if class_string not in ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1506",
             #                                 "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
             #                                 "1611","1612","1613","1614","1615","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"]:
@@ -181,11 +181,9 @@ class VerifyPredictions:
                 exit()
             elif save =="skip":
                 self.skipped += 1
-                # print(norm_preds(pred,im0s))
                 continue
-            # print(f"Saving image: {save}")
-            pred = norm_preds(pred,im0s)
-            self.save_image_to_dir(im0s,pred,save)
+            pred = norm_preds(pred,img0)
+            self.save_image_to_dir(img0,pred,save)
         print("Done verifying predictions!")
     def skip_or_false(self,false_prob:float):
         """
@@ -317,14 +315,11 @@ class DataSplitter:
 
 with torch.no_grad():
     if __name__=="__main__":
-        model,imgsz,names = initialize_yolo_model(parse_config()[0])
-        data_ext = DataExtractor(None, 1, ["../datasets/Examples/Sequences/","../datasets/SuperAnnotate/SchenkGood"],"../datasets/Examples/Sequence_images_schenk/")
-        #print(data_ext.images_to_extract)
-        # # #data_ext.extract()
-        print(len(data_ext.image_paths))
-        data = LoadImages(data_ext.image_paths,auto=False,img_size=imgsz,stride=model.stride)
-        print(len(data))
-        verify = VerifyPredictions(model,data,"../datasets/Examples/Sequence_verify_schenk/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
+        args, data = parse_config()
+        model, imgsz, names = initialize_yolo_model(args,data)
+        print(names)
+        data = LoadImages(args.source,imgsz=imgsz)
+        verify = VerifyPredictions(model,data,names,"/Users/theodorjonsson/GithubProjects/Adopticum/BolidenYolo/Datasets/Boliden/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
         verify.verify()
         # data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/","../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
         # data_splitter.create_folders()
