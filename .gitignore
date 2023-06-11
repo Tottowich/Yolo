@@ -83,7 +83,7 @@ __pycache__/
 
 # C extensions
 *.so
-
+yolov8/digit8x_extended/weights/*
 # Distribution / packaging
 .Python
 env/

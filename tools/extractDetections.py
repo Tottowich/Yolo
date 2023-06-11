@@ -9,12 +9,12 @@ import random
 import numpy as np
 from tqdm import tqdm
 from datetime import datetime as dt
-from arguments import parse_config
+from tools.arguments import parse_config
 from typing import Callable
 from ultralytics.yolo.utils.ops import scale_boxes
 from tools.StreamLoader import LoadImages
 from tools.boliden_utils import get_cut_out
-from boliden_utils import initialize_yolo_model, scale_preds, get_cut_out, visualize_yolo_2D,xyxy2xywh,to_gray,increase_contrast,norm_preds
+from tools.boliden_utils import initialize_yolo_model, scale_preds, get_cut_out, visualize_yolo_2D,xyxy2xywh,to_gray,increase_contrast,norm_preds
 
 TIMESTAMP = dt.now().strftime("%Y%m%d_%H%M%S")
 class DataExtractor:
@@ -218,11 +218,11 @@ class DataSplitter:
         val: Percentage of data to use for validation.
         test: Percentage of data to use for testing.
     """
-    def __init__(self,input_folder:str, output_fldoer:str, train:float,val:float,test:float) -> None:
+    def __init__(self,input_folder:str, output_folder:str, train:float,val:float,test:float) -> None:
         assert train+val+test == 1.0, "Train, val and test must add up to 1.0"
         self.batch_name = str(RANDOM_WORD.get_random_word())
         self.input_folder = input_folder
-        self.output_folder = output_fldoer
+        self.output_folder = output_folder
         self.train = train
         self.val = val
         self.test = test
@@ -233,8 +233,8 @@ class DataSplitter:
         self.data_paths = []
         self.names = ["0","1","2","3","4","5","6","7","8","9"]
         self.nc = len(self.names)
-        # self.create_folders()
-        # self.get_paths()
+        self.create_folders()
+        self.get_paths()
         # self.split_data()
     def create_folders(self,):
         """
@@ -253,6 +253,7 @@ class DataSplitter:
         Get paths to images and labels. Store them in tuple.
         """
         for file in os.listdir(self.input_folder):
+            print(file)
             if file.endswith(".jpg") or file.endswith(".png"):
                 img_path = os.path.join(self.input_folder,file)
                 label_path = os.path.join(self.input_folder,file.split(".")[0]+".txt")
@@ -265,20 +266,16 @@ class DataSplitter:
         print("Copying data to: {}".format(folder))
         for img_path, label_path in paths:
             dest_path = os.path.join(folder,img_path.split("/")[-1].split(".")[0]+"_"+self.batch_name)
-            print(dest_path)
-            print("Copying: {}".format(img_path))
-            shutil.copy(img_path, dest_path+".jpg")
+            shutil.move(img_path, dest_path+".jpg")
             lbl = np.loadtxt(label_path, delimiter=" ", dtype=np.float32)
             if len(lbl):
-                lbl[:,1] = lbl[:,1]
-                if len(lbl) and sum(lbl[:,1]>1) >= 1:
-                    print("Error: {}".format(img_path))
                 np.savetxt(label_path, lbl, fmt="%d %f %f %f %f", delimiter=" ")
-            shutil.copy(label_path, dest_path+".txt")
+            shutil.move(label_path, dest_path+".txt")
     def reformat_data(self,paths):
         """
         Labels constist of cls,x,y,w,h in txt files. 
         """
+        raise NotImplementedError
     def create_yaml(self):
         """
         Create yaml file containing dataset information.
@@ -300,13 +297,14 @@ class DataSplitter:
         """
         Split data into train, val and test set.
         """
-        print("Splitting data...")
+        print(f"Splitting {len(self.data_paths)} images into train, val and test set...")
         train_len = int(len(self.data_paths)*self.train)
         val_len = int(len(self.data_paths)*self.val)
         test_len = int(len(self.data_paths)*self.test)
         train_paths = self.data_paths[:train_len]
         val_paths = self.data_paths[train_len:train_len+val_len]
         test_paths = self.data_paths[train_len+val_len:]
+        print("Train: {}, Val: {}, Test: {}".format(len(train_paths),len(val_paths),len(test_paths)))
         self.copy_data(train_paths,self.train_folder)
         self.copy_data(val_paths,self.val_folder)
         self.copy_data(test_paths,self.test_folder)
@@ -319,22 +317,23 @@ class DataSplitter:
 
 with torch.no_grad():
     if __name__=="__main__":
-        args, data = parse_config()
-        model, imgsz, names = initialize_yolo_model(args,data)
-        data = LoadImages(args.source,imgsz=imgsz)
-        verify = VerifyPredictions(model,data,names,"/Users/theodorjonsson/GithubProjects/Adopticum/BolidenYolo/Datasets/Boliden/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
-        def pre_process(path:str, img0:np.ndarray, img:torch.Tensor, *_):
-            # Read YOLO format labels and extract bbox of class 1
-            label_path = path.replace(".jpg", ".txt").replace(".png", ".txt")
-            labels = np.loadtxt(label_path, delimiter=" ", dtype=np.float32).reshape(-1, 6)
-            labels = labels[labels[:, 0] == 1]
-            # Extract largest bbox
-            if len(labels):
-                largest = np.argmax(labels[:, 4]*labels[:, 5])
-                labels = labels[largest]
-                cls,*xyxy = labels
+        pass
+        # args, data = parse_config()
+        # model, imgsz, names = initialize_yolo_model(args,data)
+        # data = LoadImages(args.source,imgsz=imgsz)
+        # verify = VerifyPredictions(model,data,names,"/Users/theodorjonsson/GithubProjects/Adopticum/BolidenYolo/Datasets/Boliden/",count_auto_annotated=0,count_manual_annotated=0) # 247 141
+        # def pre_process(path:str, img0:np.ndarray, img:torch.Tensor, *_):
+        #     # Read YOLO format labels and extract bbox of class 1
+        #     label_path = path.replace(".jpg", ".txt").replace(".png", ".txt")
+        #     labels = np.loadtxt(label_path, delimiter=" ", dtype=np.float32).reshape(-1, 6)
+        #     labels = labels[labels[:, 0] == 1]
+        #     # Extract largest bbox
+        #     if len(labels):
+        #         largest = np.argmax(labels[:, 4]*labels[:, 5])
+        #         labels = labels[largest]
+        #         cls,*xyxy = labels
 
-        verify.verify()
+        # verify.verify()
         # data_splitter = DataSplitter("../datasets/Examples/Sequence_verify/autoV2/",
         # "../datasets/YoloFormat/BolidenDigits/",0.9,0.05,0.05)
         # data_splitter.create_folders()
