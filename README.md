@@ -111,5 +111,5 @@ Detection algorithm with utilizes both tracking and validation to make accurate 
 
 ### Example usage:
 ```bash
-python live_yolo.py --webcam --track --track_digits --visualize --time 60 --disp_pred --object_frames 10 --class_to_track 1 --verbose
+python live_yolo.py --webcam "0" --track --track_digits --visualize --time 60 --disp_pred --object_frames 10 --class_to_track 1 --verbose
 ```

@@ -24,13 +24,15 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))
 from typing import Dict, Optional, Tuple, TypeVar, Union
 
-from models.common import DetectMultiBackend
+from ultralytics import YOLO
+# from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
+# from ultralytics.yolo.data.dataloaders.stream_loaders import LoadImages  # , LoadStreams
+from ultralytics.yolo.utils.plotting import Annotator, colors
+from ultralytics.yolo.utils.torch_utils import select_device, time_sync
+from ultralytics.yolo.utils import LOGGER
+from ultralytics.yolo.utils.ops import scale_boxes
+from tools.StreamLoader import LoadStreams, LoadImages
 from tools.transmitter import Transmitter
-from utils.augmentations import letterbox
-from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
-from utils.general import LOGGER, check_img_size, non_max_suppression, scale_coords
-from utils.plots import Annotator, colors
-from utils.torch_utils import select_device, time_sync
 
 # FALLBACK LIST OF POSSIBLE COMBINATIONS IF FILE WITH COMBINATIONS IS NOT PROVIDED
 LIST_OF_COMB = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1505","1506",
@@ -43,7 +45,7 @@ OFFSET = 30 # ,30]
 def xyxy2xywh(xyxy:tuple)->tuple:
     x1,y1,x2,y2 = xyxy
     return ((x1+x2)/2,(y1+y2)/2,x2-x1,y2-y1)
-def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
+def disp_pred(pred:Union[np.ndarray,list],names:list, logger:LOGGER)->None:
     """
     Display each prediction made,
     and how many of each class is predicted.
@@ -55,12 +57,11 @@ def disp_pred(pred:Union[np.ndarray,list],names:list,logger:LOGGER)->None:
     assert logger is not None, "Logger object is not passed"
     logger.info(f"{Fore.GREEN}Predictions:{Style.RESET_ALL}")
     class_count = np.zeros((len(names),1), dtype=np.int16)
-    for i,det in enumerate(pred):
-        if len(det):
-            for j,(*xyxy, conf, cls) in enumerate(det):
-                c = int(cls)
-                class_count[c] += 1
-    for i,name in enumerate(names):
+    if len(pred):
+        for j,(*xyxy, conf, cls) in enumerate(pred):
+            c = int(cls)
+            class_count[c] += 1
+    for i, name in enumerate(names):
         if class_count[i]>0:
             logger.info(f"{Fore.GREEN}{name}:{Style.RESET_ALL} {class_count[i]}")
     logger.info(f"{Fore.GREEN}Total:{Style.RESET_ALL} {np.sum(class_count)}")
@@ -137,34 +138,40 @@ def visualize_yolo_2D(pred:np.ndarray,
         assert hide_conf is not None, "Hide confidence is not passed"
     if rescale:
         assert img is not None, "Image is not passed"
-    for i,det in enumerate(pred):
-        annotator = Annotator(img0, line_width=line_thickness, example=str(names))
-        if len(det):
-            if rescale:
-                det[:,:4] = scale_coords(img.shape[2:], det[:,:4], img0.shape).round()
-            
-            classes = []
-            pos_x = []
-            for *xyxy, conf, cls in det:
-                c = int(cls)  # integer class
-                if classes_not_to_show is not None and c in classes_not_to_show:
-                    continue
-                label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                annotator.box_label(xyxy, label, color=colors(c, True))
-            img0 = annotator.result()
-            class_string = ""
-            while len(classes)>0:
-                id = np.argmin(pos_x)
-                class_string += f"{names[classes[id]]}"
-                pos_x.pop(id)
-                classes.pop(id)
-            cv2.imshow(image_name,cv2.resize(img0,(640,int(640/img0.shape[1]*img0.shape[0]))))
-            cv2.waitKey(1)
-        else:
-            img0  = annotator.result()
-            cv2.imshow(image_name,img0)
-            cv2.waitKey(1)
-        return class_string
+    # for i,det in enumerate(pred):
+    annotator = Annotator(img0, line_width=line_thickness, example=str(names))
+    if len(pred):
+        if rescale:
+            pred[:,:4] = scale_boxes(img.shape[2:], pred[:,:4], img0.shape[:-1]).round()
+        
+        classes = []
+        pos_x = []
+        for *xyxy, conf, cls in pred:
+            c = int(cls)  # integer class
+            if classes_not_to_show is not None and c in classes_not_to_show:
+                continue
+            label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+            annotator.box_label(xyxy, label, color=colors(c, True))
+        img0 = annotator.result()
+        class_string = ""
+        while len(classes)>0:
+            id = np.argmin(pos_x)
+            class_string += f"{names[classes[id]]}"
+            pos_x.pop(id)
+            classes.pop(id)
+        cv2.imshow(image_name,img0)#cv2.resize(img0,(640,int(640/img0.shape[1]*img0.shape[0]))))
+        cv2.waitKey(1)
+    else:
+        img0  = annotator.result()
+        cv2.imshow(image_name,img0)#cv2.resize(img0,(640,int(640/img0.shape[1]*img0.shape[0]))))
+        cv2.waitKey(1)
+    return class_string
+from ultralytics.yolo.engine.results import Results
+def visualize_new(pred:Results, img0:np.ndarray=None,image_name:str="Object Predictions")->None:
+    plot = pred.plot(img_gpu=img0)[0].transpose(1,2,0)
+    assert isinstance(plot,np.ndarray), f"plot must be a np.ndarray, got {type(plot)}"
+    cv2.imshow(image_name,cv2.cvtColor(plot,cv2.COLOR_RGB2BGR))
+    cv2.waitKey(1)
 
 class TimeLogger:
     """
@@ -278,7 +285,7 @@ class TimeLogger:
         
         self.metrics_pd = pd.DataFrame([time_averages,time_max,time_min],index=["average","max","min"])
         if self.logger is not None:
-            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nLoading time: {self.metrics_pd['Full Pipeline']['average']-sum_ave:.3e} s\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
+            self.logger.info(f"Table To summarize:\n{self.metrics_pd}\nFrames per second: {1/self.metrics_pd['Full Pipeline']['average']:.3e} Hz")
         else:
             print(f"Table To summarize:\n{self.metrics_pd}")
         if self.save_log:
@@ -407,7 +414,9 @@ def increase_contrast(img:np.ndarray)->np.ndarray:
     img = clahe.apply(img)
     img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
     return img
-def initialize_yolo_model(args):
+
+
+def initialize_yolo_model(args, data):
     """
     Initialize YOLO model.
     Args:
@@ -417,15 +426,12 @@ def initialize_yolo_model(args):
     """
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=half)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
+    model = YOLO(args.weights, task='detect')
+    names = data["object"]["names"]
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
     return model,imgsz,names
 
-def initialize_network(args):
+def initialize_network(args, data):
     """
     Initialize the network.
     Create live streaming object to stream data from the sensor.
@@ -435,15 +441,11 @@ def initialize_network(args):
     """
     device = select_device(args.device)
     half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    model = DetectMultiBackend(args.weights, device=device, dnn=args.dnn, data=args.data, fp16=half)
-    memory_usage(model)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
+    model = YOLO(args.weights, task='detect')
+    names = data["object"]["names"]
     imgsz = (args.imgsz, args.imgsz) if isinstance(args.imgsz, int) else args.imgsz  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
     example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    flop_counter(model, example_img)
+    # flop_counter(model, example_img) # REMOVED
     # Create file to save logs to.
     if args.save_time_log:
         dir_path = create_logging_dir(args.name_run, ROOT / "logs",args)
@@ -451,10 +453,10 @@ def initialize_network(args):
         dir_path = None
     source = args.source
     if source is not None and (os.path.isfile(source) or os.path.isdir(source)):
-        live = LoadImages(path=source,img_size=imgsz,stride=stride,auto=args.auto,reverse=False)
+        live = LoadImages(path=source, imgsz=imgsz, vid_stride=args.vid_stride)
     elif args.webcam:
         source = args.webcam
-        live = LoadStreams(sources=source,img_size=imgsz,stride=stride,auto=args.auto, to_gray=False)
+        live = LoadStreams(sources=source, imgsz=imgsz,vid_stride=args.vid_stride)
     else:
         raise ValueError("Invalid source. Or please specify that the source is a webcam. via --webcam flag.")
 
@@ -509,25 +511,18 @@ def initialize_timer(time_logger:TimeLogger,args,transmitter=None):
 
     return time_logger
 
-def initialize_digit_model(args,logger=None):
+def initialize_digit_model(args,data,logger=None):
     """
     Initialize the digit detection model with tracking.
     Args:
         args: Arguments from the command line.
     """
     device = select_device(args.device)
-    half = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
-    print(f"PRE CREATION")
-    model = DetectMultiBackend(args.weights_digits, device=device, dnn=False, data=args.data_digit, fp16=half)
-    print(f"POST CREATION")
-    memory_usage(model)
-    model.eval()
-    stride, names, pt = model.stride, model.names, model.pt
-    imgsz = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
-    imgsz = check_img_size(imgsz=imgsz, s=stride)
-    example_img = torch.zeros((1, 3, *imgsz), device=device)  # init img
-    model.warmup(imgsz=(1 if pt else 1, 3, *imgsz))
-    flop_counter(model, example_img)
+    half   = args.half if device.type != 'cpu' else False  # half precision only supported on CUDA
+    model  = YOLO(args.weights_digits, task='detect')
+    names  = data["digit"]["names"]
+    imgsz   = (args.imgsz_digit, args.imgsz_digit) if isinstance(args.imgsz_digit, int) else args.imgsz_digit  # tuple
+    # flop_counter(model, example_img)
     
     from DigitDetector import DigitDetector  # Import here to avoid circular import.
     dd = DigitDetector(model=model,
@@ -545,7 +540,7 @@ def initialize_digit_model(args,logger=None):
                         list_of_combinations=args.combination_file if args.combination_file is not None else LIST_OF_COMB, # TODO: Add the list of combinations to be tracked as read from a file.
                         visualize=args.visualize,
                         wait=args.wait,)
-    return dd
+    return dd, names
 class ProgBar(tqdm):
     def __init__(self, is_live:bool=False,duration:Union[float,int]=-1,*args, **kwargs):
         super().__init__(*args, **kwargs,total=duration)
@@ -605,14 +600,14 @@ def norm_preds(pred,im0s):
     """
     Normalize predictions to image size.
     """
-    for i,p in enumerate(pred):
-        if p is not None:
-            xyxy = p[:, :4]
-            xyxy[:, 0] /= im0s.shape[1]
-            xyxy[:, 1] /= im0s.shape[0]
-            xyxy[:, 2] /= im0s.shape[1]
-            xyxy[:, 3] /= im0s.shape[0]
-            pred[i][:,:4] = xyxy
+    pred[:, :4] /= np.array(im0s.shape)[[1, 0, 1, 0]]
+        # if p is not None:
+        #     xyxy = p[:, :4]
+        #     xyxy[:, 0] /= im0s.shape[1]
+        #     xyxy[:, 1] /= im0s.shape[0]
+        #     xyxy[:, 2] /= im0s.shape[1]
+        #     xyxy[:, 3] /= im0s.shape[0]
+        #     pred[i][:,:4] = xyxy
     return pred
 def flop_counter(model,x,**kwargs):
     from thop import profile
@@ -628,3 +623,10 @@ def memory_usage(model):
     mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
     mem = mem_params + mem_bufs # in bytes
     print(f"{model.__class__.__name__} has {mem/1e6:.2f} MBytes of memory")
+
+def int2tuple(possible_int:Union[int,list,tuple])->tuple:
+    if isinstance(possible_int, int):
+        possible_int = (possible_int, possible_int)
+    elif isinstance(possible_int, list):
+        possible_int = tuple(possible_int)
+    return possible_int

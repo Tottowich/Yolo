@@ -1,13 +1,15 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
-yolo_env*
-Xr-Synthesize*/
-*.ipynb
 runs/
 evolve/
 best_weights/
-*.jpg
+train*.jpg
+val*.jpg
+test*.jpg
+train*.png
+val*.png
+/yolov8/schenk8n/test_results/
 *.jpeg
-*.png
+#*.png
 *.bmp
 *.tif
 *.tiff
@@ -57,8 +59,9 @@ VOC/
 # Neural Network weights -----------------------------------------------------------------------------------------------
 *.weights
 *.pt
+!best.pt
 *.pb
-*.onnx
+#*.onnx
 !TrainedModels/Object/object.onnx
 !TrainedModels/Digit/digit.onnx
 *.engine
@@ -80,7 +83,7 @@ __pycache__/
 
 # C extensions
 *.so
-
+yolov8/digit8x_extended/weights/*
 # Distribution / packaging
 .Python
 env/

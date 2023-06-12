@@ -17,7 +17,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     #parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
     #                    help='specify the config for demo')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / './TrainedModels/Object/object.onnx', help='model path(s) detect objects')
+    parser.add_argument('--weights', type=str, default=ROOT / './TrainedModels/Object/object.onnx', help='model path(s) detect objects')
 
     parser.add_argument('--source', type=str, default=None, help='model path(s)')
 
@@ -59,6 +59,7 @@ def parse_config():
     parser.add_argument('--combination_file', type=str, default='./TrainedModels/data/combinations.txt', help='(optional) combination.txt path text file with currently valid digit combinations.')
     parser.add_argument('--time', type=int, default=-1
     , help='specify the time to stream data from a sensor')
+    parser.add_argument('--vid_stride', type=int, default=1, help='specify the stride of the video, 1 is every frame, 2 is every other frame, etc.')
     # Webcam should be a string which is the camera index. It should be activated as a boolean.
     parser.add_argument('--webcam', type=str, default=None, help='specify the webcam index')
     if sys.version_info >= (3,9):
@@ -84,11 +85,17 @@ def parse_config():
     if isinstance(args.imgsz_digit, list) and len(args.imgsz_digit) == 1:
         args.imgsz_digit = args.imgsz_digit[0]
     if isinstance(args.imgsz_digit,int):
-        args.imgsz_digit = (args.imgsz_digit, args.imgsz_digit)        
-    with open(args.data,'r') as f:
-        try:
-            data_config = yaml.safe_load(f)
-        except:
-            raise ValueError(f"Invalid data config file: {args.data}")
+        args.imgsz_digit = (args.imgsz_digit, args.imgsz_digit)  
+    data = {
+        "object": read_yaml(args.data),
+        "digit": read_yaml(args.data_digit)
+    }
+    
 
-    return args, data_config
+    return args, data
+def read_yaml(path):
+     with open(path,'r') as f:
+        try:
+            return yaml.safe_load(f)
+        except:
+            raise ValueError(f"Invalid data config file: {path}")
