@@ -94,9 +94,7 @@ class VerifyPredictions:
         self.data.start = self.start
         self.auto_name = "autoSchenk"
         self.manual_name = "manualSchenk"
-        self.valid_list = ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1506",
-                            "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
-                            "1611","1612","1613","1614","1615","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"]
+        self.valid_list = [None]
         self.create_output_dirs()
     def create_output_dirs(self):
         """
@@ -151,6 +149,9 @@ class VerifyPredictions:
         pbar = tqdm(total=len(self.data))
         # Set pbar to start at current count
         pbar.update(self.start)
+        winname = "Whole Image"
+        cv2.namedWindow(winname)        # Create a named window
+        cv2.moveWindow(winname, 40, 30)
         for path, img0, img, *_ in self.data:
             if pre_process:
                 path, img0, img, *_ = pre_process(path, img0, img, *_)
@@ -158,11 +159,7 @@ class VerifyPredictions:
             img0_shape = img0.shape[:-1]
             img_shape = img.shape[2:]
             # print(im0s.shape)
-            winname = "Whole Image"
-            cv2.namedWindow(winname)        # Create a named window
-            cv2.moveWindow(winname, 40,30)
-            results = model.predict(img,
-                                    augment=args.augment,
+            results = self.model.predict(img,
                                     verbose=False,
                                     nms=True,
                                     conf=0.2,
@@ -172,14 +169,8 @@ class VerifyPredictions:
             pred = results.boxes.data
             pred[:,:4] = scale_boxes(img_shape, pred[:,:4], img0_shape).round()            
             cv2.imshow(winname,cv2.resize(img0,(640,img0.shape[0]*640//img0.shape[1])))
-            class_string = visualize_yolo_2D(pred,img0=img0,img=img,names=self.names)
-            random_show = random.random() < 0.2
-            save = self.get_input() # if (class_string in self.valid_list or random_show) else False
-            # if class_string not in ["082","095","1204","1206","1308","1404","1405","1407","1408","1501","1503","1506",
-            #                                 "1508","1509","1510","1511","1516","1601","161","1602","162","163","164","1605","165","1606","166","1607","1608","1609","1610",
-            #                                 "1611","1612","1613","1614","1615","1617","1619","1623","1625","1625","191","193","195","196","197","198","1910","2103","2104","2105","2106","2108"]:
-            #     print("Invalid class, skipping image...")
-            #     save = False
+            class_string = visualize_yolo_2D(pred, img0=img0, img=img,names=self.names)
+            save = self.get_input()
             if save == "quit":
                 print("Stopped @ Auto Annotated: {}. Manual Annotated: {}. Skipped {}".format(self.count_auto_annotated,self.count_manual_annotated,self.skipped))
                 exit()
