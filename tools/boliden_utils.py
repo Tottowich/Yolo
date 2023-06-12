@@ -25,13 +25,14 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))
 from typing import Dict, Optional, Tuple, TypeVar, Union
 
 from ultralytics import YOLO
+from ultralytics.yolo.utils import LOGGER
+from ultralytics.yolo.utils.ops import scale_boxes
 # from utils.dataloaders import LoadImages, LoadStreams, LoadWebcam
 # from ultralytics.yolo.data.dataloaders.stream_loaders import LoadImages  # , LoadStreams
 from ultralytics.yolo.utils.plotting import Annotator, colors
 from ultralytics.yolo.utils.torch_utils import select_device, time_sync
-from ultralytics.yolo.utils import LOGGER
-from ultralytics.yolo.utils.ops import scale_boxes
-from tools.StreamLoader import LoadStreams, LoadImages
+
+from tools.StreamLoader import LoadImages, LoadStreams
 from tools.transmitter import Transmitter
 
 # FALLBACK LIST OF POSSIBLE COMBINATIONS IF FILE WITH COMBINATIONS IS NOT PROVIDED
@@ -167,6 +168,8 @@ def visualize_yolo_2D(pred:np.ndarray,
         cv2.waitKey(1)
     return class_string
 from ultralytics.yolo.engine.results import Results
+
+
 def visualize_new(pred:Results, img0:np.ndarray=None,image_name:str="Object Predictions")->None:
     plot = pred.plot(img_gpu=img0)[0].transpose(1,2,0)
     assert isinstance(plot,np.ndarray), f"plot must be a np.ndarray, got {type(plot)}"
@@ -292,7 +295,7 @@ class TimeLogger:
             self.metrics_pd.to_csv(f"{self.path}/timings.csv")
     
           
-def get_cut_out(image:np.ndarray,xyxy:tuple,offset:Union[int,list]=0)->np.ndarray:
+def get_cut_out(image:np.ndarray,xyxy:tuple,offset:Union[int,list]=OFFSET)->np.ndarray:
     """
     Get a cut out of the image.
     Args:
@@ -630,3 +633,6 @@ def int2tuple(possible_int:Union[int,list,tuple])->tuple:
     elif isinstance(possible_int, list):
         possible_int = tuple(possible_int)
     return possible_int
+def check_and_create_dir(path:str)->None:
+    if not os.path.exists(path):
+        os.makedirs(path)

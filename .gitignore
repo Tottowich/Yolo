@@ -1,7 +1,7 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 runs/
 evolve/
-best_weights/
+samples/
 train*.jpg
 val*.jpg
 test*.jpg

@@ -1,4 +1,5 @@
 import argparse
+from .boliden_utils import check_and_create_dir
 from random_word import RandomWords
 RANDOM_NAME = RandomWords()
 import sys
@@ -59,6 +60,7 @@ def parse_config():
     parser.add_argument('--combination_file', type=str, default='./TrainedModels/data/combinations.txt', help='(optional) combination.txt path text file with currently valid digit combinations.')
     parser.add_argument('--time', type=int, default=-1
     , help='specify the time to stream data from a sensor')
+    parser.add_argument('--output_folder', type=str, default=None, help='specify the output folder to save the results')
     parser.add_argument('--vid_stride', type=int, default=1, help='specify the stride of the video, 1 is every frame, 2 is every other frame, etc.')
     # Webcam should be a string which is the camera index. It should be activated as a boolean.
     parser.add_argument('--webcam', type=str, default=None, help='specify the webcam index')
@@ -90,6 +92,8 @@ def parse_config():
         "object": read_yaml(args.data),
         "digit": read_yaml(args.data_digit)
     }
+    if args.output_folder:
+        check_and_create_dir(args.output_folder)
     
 
     return args, data
