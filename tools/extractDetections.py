@@ -258,19 +258,28 @@ class DataSplitter:
                 img_path = os.path.join(self.input_folder,file)
                 label_path = os.path.join(self.input_folder,file.split(".")[0]+".txt")
                 self.data_paths.append((img_path,label_path))
-    def copy_data(self,paths,folder):
+    def move_data(self,paths,folder):
         import time
         """
         Copy data to train, val or test folder.
         """
         print("Copying data to: {}".format(folder))
         for img_path, label_path in paths:
-            dest_path = os.path.join(folder,img_path.split("/")[-1].split(".")[0]+"_"+self.batch_name)
+            print(f"Moving {img_path} and {label_path}")
+            dest_path = os.path.join(folder,img_path.split("/")[-1].split(".")[0])
             shutil.move(img_path, dest_path+".jpg")
-            lbl = np.loadtxt(label_path, delimiter=" ", dtype=np.float32)
-            if len(lbl):
-                np.savetxt(label_path, lbl, fmt="%d %f %f %f %f", delimiter=" ")
             shutil.move(label_path, dest_path+".txt")
+            # lbl = np.loadtxt(label_path, delimiter=" ", dtype=np.float32)
+            # if len(lbl)>0:
+            #     np.savetxt(label_path, lbl, fmt="%d %f %f %f %f", delimiter=" ")
+                # try:
+                #     np.savetxt(label_path, lbl, fmt="%d %f %f %f %f", delimiter=" ")
+                # except ValueError:
+                #     # Fallback behavior when ValueError occurs
+                #     # Load an empty file or handle the error gracefully
+                #     with open(label_path, 'w') as file:
+                #         # Write an empty string to the file
+                #         file.write("")
     def reformat_data(self,paths):
         """
         Labels constist of cls,x,y,w,h in txt files. 
@@ -305,9 +314,9 @@ class DataSplitter:
         val_paths = self.data_paths[train_len:train_len+val_len]
         test_paths = self.data_paths[train_len+val_len:]
         print("Train: {}, Val: {}, Test: {}".format(len(train_paths),len(val_paths),len(test_paths)))
-        self.copy_data(train_paths,self.train_folder)
-        self.copy_data(val_paths,self.val_folder)
-        self.copy_data(test_paths,self.test_folder)
+        self.move_data(train_paths,self.train_folder)
+        self.move_data(val_paths,self.val_folder)
+        self.move_data(test_paths,self.test_folder)
         # self.create_yaml()
         print("Done splitting data!")
 
